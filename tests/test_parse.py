@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from blind_mcp import parse
+from payband_mcp import parse
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

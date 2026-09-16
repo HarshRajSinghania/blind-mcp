@@ -21,9 +21,9 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Iterable
 
 from . import money, workday
-from .__init__ import __version__
+from . import __version__
 
-USER_AGENT = f"blind-mcp/{__version__} (+https://github.com/dheerajjha/blind-mcp)"
+USER_AGENT = f"payband-mcp/{__version__} (+https://github.com/dheerajjha/payband-mcp)"
 TIMEOUT = 30
 
 GREENHOUSE = "https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true"

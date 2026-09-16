@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from blind_mcp import server
+from payband_mcp import server
 
 
 def test_topic_matching_handles_synonyms():
@@ -168,13 +168,13 @@ def test_find_mcp_schema_exposes_page(monkeypatch):
 
     # Blind tools are not registered by default while Blind 403s every
     # automated request, so the schema only exists with them switched on.
-    monkeypatch.setenv("BLIND_MCP_ENABLE_BLIND", "1")
+    monkeypatch.setenv("PAYBAND_ENABLE_BLIND", "1")
     with_blind = importlib.reload(server)
     try:
         tools = asyncio.run(with_blind.mcp.list_tools())
         schema = next(tool for tool in tools if tool.name == "find").input_schema
     finally:
-        monkeypatch.delenv("BLIND_MCP_ENABLE_BLIND")
+        monkeypatch.delenv("PAYBAND_ENABLE_BLIND")
         importlib.reload(server)
     assert schema["properties"]["page"]["type"] == "integer"
     assert schema["properties"]["page"]["default"] == 1
@@ -198,3 +198,20 @@ def test_company_candidates_are_cheapest_first():
     assert "Goldman-Sachs" in cands             # hyphenated, as Blind writes it
     assert len(cands) == len(set(cands))        # no wasted duplicate requests
     assert server._company_candidates("Roku")[0] == "roku"
+
+
+def test_old_env_var_names_still_work(monkeypatch):
+    """The project was blind-mcp; a rename must not ignore existing config."""
+    from payband_mcp import http
+
+    monkeypatch.delenv("PAYBAND_CACHE_TTL", raising=False)
+    monkeypatch.setenv("BLIND_MCP_CACHE_TTL", "99")
+    assert http.env("CACHE_TTL") == "99"
+
+    # ...but the new name wins when both are set.
+    monkeypatch.setenv("PAYBAND_CACHE_TTL", "7")
+    assert http.env("CACHE_TTL") == "7"
+
+    monkeypatch.delenv("BLIND_MCP_CACHE_TTL")
+    monkeypatch.delenv("PAYBAND_CACHE_TTL")
+    assert http.env("CACHE_TTL", "fallback") == "fallback"

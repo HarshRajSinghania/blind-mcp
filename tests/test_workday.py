@@ -2,7 +2,7 @@
 
 import pytest
 
-from blind_mcp import ats, workday
+from payband_mcp import ats, workday
 
 ROBOTS = """Sitemap: https://nvidia.wd5.myworkdayjobs.com/NVIDIAExternalCareerSite/siteMap.xml
 

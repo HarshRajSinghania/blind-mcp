@@ -2,7 +2,7 @@
 
 import pytest
 
-from blind_mcp.money import parse
+from payband_mcp.money import parse
 
 
 def band(text):

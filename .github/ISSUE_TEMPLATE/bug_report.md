@@ -19,4 +19,4 @@ If you know the thread it should have found, link it.
 **Environment**
 
 - transport: stdio / http
-- `blind-mcp --version` or commit
+- `payband-mcp --version` or commit

@@ -1,12 +1,18 @@
-# blind-mcp
+# payband-mcp
 
-[![tests](https://github.com/dheerajjha/blind-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/dheerajjha/blind-mcp/actions/workflows/test.yml)
-[![good first issues](https://img.shields.io/github/issues/dheerajjha/blind-mcp/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/dheerajjha/blind-mcp/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
-[![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/dheerajjha/blind-mcp/blob/main/pyproject.toml)
-[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/dheerajjha/blind-mcp/blob/main/LICENSE)
+[![tests](https://github.com/dheerajjha/payband-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/dheerajjha/payband-mcp/actions/workflows/test.yml)
+[![good first issues](https://img.shields.io/github/issues/dheerajjha/payband-mcp/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/dheerajjha/payband-mcp/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/dheerajjha/payband-mcp/blob/main/pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/dheerajjha/payband-mcp/blob/main/LICENSE)
 
 **Find out what a role actually pays — including in markets where the employer
 publishes nothing.**
+
+> Renamed from `blind-mcp` in 0.5.0. The Blind tools are still here (see
+> [below](#culture--not-registered-by-default)), but reading published pay
+> bands is what this does, so the name now says so. The old GitHub URL
+> redirects; the old PyPI package points here. `BLIND_MCP_*` environment
+> variables still work — `PAYBAND_*` is preferred.
 
 Colorado, California, New York, Washington and Illinois require a salary range
 on covered job postings. India, Singapore and most of the EU require none. So
@@ -88,7 +94,7 @@ Documented, intended for machines, and stable — not scraping.
 | `research(company, question, max_posts=)` | Pick the topic, rank threads against the question, return them in full |
 | `company_topics` / `company_posts` / `read_post` | Listings and single threads |
 
-These five are **switched off unless you ask for them** (`BLIND_MCP_ENABLE_BLIND=1`).
+These five are **switched off unless you ask for them** (`PAYBAND_ENABLE_BLIND=1`).
 A tool list is part of what a model reads before deciding what to do, and five
 entries that can currently only raise cost context and invite dead ends. The
 code and its tests are untouched, so the flag brings them straight back.
@@ -103,7 +109,7 @@ code and its tests are untouched, so the flag brings them straight back.
 > Blind tools now raise `BlindBlocked` with an explanation rather than
 > returning empty results that would read as "no discussion found".
 >
-> The pay tools are unaffected. See [#12](https://github.com/dheerajjha/blind-mcp/issues/12).
+> The pay tools are unaffected. See [#12](https://github.com/dheerajjha/payband-mcp/issues/12).
 
 ## Coverage
 
@@ -147,7 +153,7 @@ pay_bands("Some Rebranded Co", "engineer", board="greenhouse:theirslug")
 ```
 
 SmartRecruiters and self-hosted Indian employers are still open in
-[#13](https://github.com/dheerajjha/blind-mcp/issues/13).
+[#13](https://github.com/dheerajjha/payband-mcp/issues/13).
 
 ## Install
 
@@ -158,8 +164,8 @@ uv sync
 Register with Claude Code:
 
 ```bash
-uv tool install --editable .          # puts `blind-mcp` on PATH
-claude mcp add --scope user blind -- blind-mcp
+uv tool install --editable .          # puts `payband-mcp` on PATH
+claude mcp add --scope user payband -- payband-mcp
 ```
 
 Or in `claude_desktop_config.json`:
@@ -167,9 +173,9 @@ Or in `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "blind": {
+    "payband": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/blind-mcp", "blind-mcp"]
+      "args": ["run", "--directory", "/path/to/payband-mcp", "payband-mcp"]
     }
   }
 }
@@ -211,8 +217,8 @@ has no search tool** and refuses to fetch that path. It also:
 - spaces requests ~1.5s apart
 - fetches `robots.txt` first and fails closed if it can't be read
 
-Configure via `BLIND_MCP_CACHE_DIR`, `BLIND_MCP_CACHE_TTL`,
-`BLIND_MCP_MIN_INTERVAL`, `BLIND_MCP_USER_AGENT`.
+Configure via `PAYBAND_CACHE_DIR`, `PAYBAND_CACHE_TTL`,
+`PAYBAND_MIN_INTERVAL`, `PAYBAND_USER_AGENT`.
 
 The job boards get the same treatment. Workday needs one request per posting
 to read a range, so those are spaced 250ms apart behind a lock shared by all
@@ -256,9 +262,9 @@ Small project, easy to contribute to. The cheapest useful change is a **keyword
 alias** — one dict entry plus a test — and it's the change that most improves
 answers, because `research` only finds threads whose words match yours.
 
-Start with [**good first issues**](https://github.com/dheerajjha/blind-mcp/blob/main/.github/GOOD_FIRST_ISSUES.md) — nine open,
+Start with [**good first issues**](https://github.com/dheerajjha/payband-mcp/blob/main/.github/GOOD_FIRST_ISSUES.md) — 5 open,
 all real and reproduced, each one saying where the code is and how to test the
-fix — then [CONTRIBUTING.md](https://github.com/dheerajjha/blind-mcp/blob/main/CONTRIBUTING.md). Issues are labelled by size (`size: XS`
+fix — then [CONTRIBUTING.md](https://github.com/dheerajjha/payband-mcp/blob/main/CONTRIBUTING.md). Issues are labelled by size (`size: XS`
 is under 30 minutes) and `mentored` means ask questions in the thread and
 you'll get walked through it. First review within 48 hours.
 
@@ -268,9 +274,9 @@ speed.
 
 ## Publishing
 
-`mcp-name: io.github.dheerajjha/blind-mcp`
+`mcp-name: io.github.dheerajjha/payband-mcp`
 
-See [RELEASING.md](https://github.com/dheerajjha/blind-mcp/blob/main/RELEASING.md).
+See [RELEASING.md](https://github.com/dheerajjha/payband-mcp/blob/main/RELEASING.md).
 
 ## License
 

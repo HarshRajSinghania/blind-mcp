@@ -23,16 +23,16 @@ from . import ats, fx, http, levels, parse
 
 from . import __version__
 
-mcp = MCPServer("blind", version=__version__)
+mcp = MCPServer("payband", version=__version__)
 
 # Blind has answered every non-browser request with 403 since around September
 # 2026 (#12), so the five tools that read it can only raise. A tool list is
 # part of what the model reads before deciding what to do, and five entries
 # that always fail cost context and invite dead ends -- so they are not
 # registered unless asked for. The code and its tests stay exactly where they
-# are, and BLIND_MCP_ENABLE_BLIND=1 brings them back the moment the block
+# are, and PAYBAND_ENABLE_BLIND=1 brings them back the moment the block
 # lifts or an operator has a legitimate route through it.
-BLIND_ENABLED = os.environ.get("BLIND_MCP_ENABLE_BLIND", "").strip().lower() in {
+BLIND_ENABLED = (http.env("ENABLE_BLIND", "") or "").strip().lower() in {
     "1", "true", "yes", "on",
 }
 
@@ -732,23 +732,23 @@ def main() -> None:
     is nothing for a process supervisor to keep alive. --http gives one
     persistent endpoint that any number of clients can connect to.
     """
-    parser = argparse.ArgumentParser(prog="blind-mcp")
+    parser = argparse.ArgumentParser(prog="payband-mcp")
     parser.add_argument(
         "--http",
         action="store_true",
         help="serve over streamable HTTP instead of stdio",
     )
-    parser.add_argument("--host", default=os.environ.get("BLIND_MCP_HOST", "127.0.0.1"))
+    parser.add_argument("--host", default=http.env("HOST", "127.0.0.1"))
     parser.add_argument(
-        "--port", type=int, default=int(os.environ.get("BLIND_MCP_PORT", "8787"))
+        "--port", type=int, default=int(http.env("PORT", "8787"))
     )
     args = parser.parse_args()
 
     if not BLIND_ENABLED:
         print(
-            "blind-mcp: Blind tools are not registered -- Blind returns 403 to "
+            "payband-mcp: Blind tools are not registered -- Blind returns 403 to "
             "automated requests (see issue #12). The pay tools are unaffected. "
-            "Set BLIND_MCP_ENABLE_BLIND=1 to register them anyway.",
+            "Set PAYBAND_ENABLE_BLIND=1 to register them anyway.",
             file=sys.stderr,
         )
 

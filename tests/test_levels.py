@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from blind_mcp import levels
+from payband_mcp import levels
 
 
 def _p(title, lo, hi, cur="USD"):

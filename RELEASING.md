@@ -18,9 +18,9 @@ gh run watch          # or: gh run list --workflow=release.yml
 ```
 
 Bump `version` in **three** places or the registry will reject the submission:
-`pyproject.toml`, `src/blind_mcp/__init__.py`, and `server.json` (twice — the
+`pyproject.toml`, `src/payband_mcp/__init__.py`, and `server.json` (twice — the
 top-level `version` and `packages[0].version`). See
-[#7](https://github.com/dheerajjha/blind-mcp/issues/7) — the version is
+[#7](https://github.com/dheerajjha/payband-mcp/issues/7) — the version is
 currently duplicated rather than derived, which is exactly the kind of thing
 that goes stale.
 
@@ -29,7 +29,7 @@ that goes stale.
 [registry.modelcontextprotocol.io](https://registry.modelcontextprotocol.io) is
 how MCP clients discover servers. It validates ownership by matching the
 `mcp-name:` marker in our README against the `name` in
-[`server.json`](server.json) — both say `io.github.dheerajjha/blind-mcp`, so
+[`server.json`](server.json) — both say `io.github.dheerajjha/payband-mcp`, so
 this is already set up.
 
 ```bash

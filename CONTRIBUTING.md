@@ -3,7 +3,7 @@
 Three ways in, cheapest first: a **job-board adapter**, a **parser fix**, a
 **new tool**. All are small — this is a ~600 line project.
 
-**Read [#12](https://github.com/dheerajjha/blind-mcp/issues/12) first.** Blind
+**Read [#12](https://github.com/dheerajjha/payband-mcp/issues/12) first.** Blind
 now 403s every non-browser User-Agent, so the Blind tools cannot reach the site.
 We will not spoof a browser to get around it, and PRs doing so will be closed.
 The pay tools read public job-board APIs and are unaffected — that is where the
@@ -42,7 +42,7 @@ has a passing test. No bikeshedding your regex.
 `ats.fetch_postings` reads Greenhouse, Ashby and Lever. Everything else —
 Google, Atlassian, Canva, most Indian employers — raises `BoardNotFound`. Each
 adapter you add is a whole category of employer the tool can suddenly answer
-for. See [#13](https://github.com/dheerajjha/blind-mcp/issues/13) for the
+for. See [#13](https://github.com/dheerajjha/payband-mcp/issues/13) for the
 candidates and the shape of the work.
 
 Prefer boards with a **documented public API**. If a board only yields to
@@ -55,7 +55,7 @@ paths.
 company pages. It gets this wrong whenever a question uses different words than
 Blind does — "work life balance" had to learn it means `wlb`.
 
-Two dicts in [`src/blind_mcp/server.py`](src/blind_mcp/server.py):
+Two dicts in [`src/payband_mcp/server.py`](src/payband_mcp/server.py):
 
 - `_TOPIC_ALIASES` — maps a Blind topic to the words people actually use.
 - `_LOW_SIGNAL` — words that are common in questions but useless as probes.
@@ -69,7 +69,7 @@ question you asked and what it returned before and after.
 
 Blind ships three overlapping copies of every post — plain HTML, a schema.org
 `DiscussionForumPosting`, and the Next.js RSC payload. We read the last two;
-see [`src/blind_mcp/parse.py`](src/blind_mcp/parse.py).
+see [`src/payband_mcp/parse.py`](src/payband_mcp/parse.py).
 
 Fixtures are **synthetic** — see
 [`tests/fixtures/make_fixtures.py`](tests/fixtures/make_fixtures.py). Do not
@@ -87,7 +87,7 @@ uv run pytest -q
 
 ## 4. Add a tool (an afternoon)
 
-Tools live in [`src/blind_mcp/server.py`](src/blind_mcp/server.py) as
+Tools live in [`src/payband_mcp/server.py`](src/payband_mcp/server.py) as
 `@mcp.tool()` functions. A tool earns its place if it answers a question the
 existing four answer badly. Write the docstring for the model that will read
 it: say when to use it, and say what an empty result means.
@@ -100,8 +100,8 @@ throttling live. A tool that calls `httpx` directly bypasses all three.
 ```bash
 uv sync
 uv run pytest -q          # 12 tests, all offline
-uv run blind-mcp          # stdio, for an MCP client
-uv run blind-mcp --http   # HTTP on :8787, for pm2
+uv run payband-mcp          # stdio, for an MCP client
+uv run payband-mcp --http   # HTTP on :8787, for pm2
 ```
 
 Tests never touch the network. If you need to check something against the real

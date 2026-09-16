@@ -1,6 +1,6 @@
 """Conversion, and what happens when rates cannot be had. No network."""
 
-from blind_mcp import fx, server
+from payband_mcp import fx, server
 
 TABLE = {"date": "2026-09-15", "rates": {"USD": 1.0, "GBP": 0.74166, "PLN": 3.7612}}
 
@@ -68,7 +68,7 @@ def _posting(currency, low, high):
 
 def test_market_rate_ranks_by_pay_not_by_exchange_rate(monkeypatch):
     """340,000 PLN sorts above 187,200 USD numerically and is worth half."""
-    from blind_mcp import ats
+    from payband_mcp import ats
 
     boards = {
         "PolandCo": [_posting("PLN", 272_000, 408_000)],
@@ -90,7 +90,7 @@ def test_market_rate_ranks_by_pay_not_by_exchange_rate(monkeypatch):
 
 
 def test_market_rate_needs_no_rates_for_one_currency(monkeypatch):
-    from blind_mcp import ats
+    from payband_mcp import ats
 
     boards = {"A": [_posting("USD", 100_000, 200_000)],
               "B": [_posting("USD", 300_000, 400_000)]}

@@ -17,18 +17,32 @@ from urllib.parse import urlparse
 
 import httpx
 
-BASE = "https://www.teamblind.com"
-VERSION = "0.1.0"
+from . import __version__
 
-USER_AGENT = os.environ.get(
-    "BLIND_MCP_USER_AGENT",
-    f"blind-mcp/{VERSION} (+https://github.com/dheerajjha/blind-mcp)",
+BASE = "https://www.teamblind.com"
+
+
+def env(name: str, default: str | None = None) -> str | None:
+    """Read PAYBAND_<name>, honouring the BLIND_MCP_ prefix it used to have.
+
+    The project was called blind-mcp until the pay tools became the point of
+    it. Renaming the variables without a fallback would silently ignore a
+    cache directory or a throttle someone had already set, which is the kind
+    of breakage that looks like the tool misbehaving rather than like a
+    rename.
+    """
+    return os.environ.get(f"PAYBAND_{name}") or os.environ.get(
+        f"BLIND_MCP_{name}", default
+    )
+
+
+USER_AGENT = env(
+    "USER_AGENT",
+    f"payband-mcp/{__version__} (+https://github.com/dheerajjha/payband-mcp)",
 )
-CACHE_DIR = Path(
-    os.environ.get("BLIND_MCP_CACHE_DIR", Path.home() / ".cache" / "blind-mcp")
-)
-CACHE_TTL = int(os.environ.get("BLIND_MCP_CACHE_TTL", 6 * 3600))
-MIN_INTERVAL = float(os.environ.get("BLIND_MCP_MIN_INTERVAL", "1.5"))
+CACHE_DIR = Path(env("CACHE_DIR") or Path.home() / ".cache" / "payband-mcp")
+CACHE_TTL = int(env("CACHE_TTL", str(6 * 3600)))
+MIN_INTERVAL = float(env("MIN_INTERVAL", "1.5"))
 
 # Opt-in only. Blind's bot detection reacts badly to automated authenticated
 # traffic (it fires an "automatic logout, code 2009" and invalidates the

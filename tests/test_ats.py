@@ -6,7 +6,7 @@ because those quirks are where every bug so far has lived.
 
 from __future__ import annotations
 
-from blind_mcp import ats
+from payband_mcp import ats
 
 
 def test_greenhouse_double_escaped_pay_element():
@@ -69,7 +69,7 @@ def test_board_slugs_are_ordered_and_unique():
 
 
 def test_summarise_spans_the_whole_band():
-    from blind_mcp import levels
+    from payband_mcp import levels
     band = [
         {"title": "Engineer", "pay": {"min": 100.0, "max": 200.0, "currency": "USD"}},
         {"title": "Engineer", "pay": {"min": 150.0, "max": 300.0, "currency": "USD"}},
@@ -89,7 +89,7 @@ def test_explicit_board_rejects_unknown_provider():
 
 def test_workday_spec_accepts_a_pasted_careers_url():
     """The site id is not derivable from a name, so a URL must be enough."""
-    from blind_mcp import workday
+    from payband_mcp import workday
     assert workday.parse_spec("nvidia/NVIDIAExternalCareerSite") == (
         "nvidia", "NVIDIAExternalCareerSite", None
     )
@@ -104,7 +104,7 @@ def test_workday_spec_accepts_a_pasted_careers_url():
 
 def test_board_not_found_explains_how_to_recover(monkeypatch):
     """A dead end should say what to do next, not just that it failed."""
-    from blind_mcp import workday
+    from payband_mcp import workday
 
     monkeypatch.setattr(ats, "_BOARDS", ())      # no loader answers
     monkeypatch.setattr(                          # ...and no Workday tenant
