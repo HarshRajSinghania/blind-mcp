@@ -171,3 +171,12 @@ def test_find_mcp_schema_exposes_page():
     assert schema["properties"]["page"]["default"] == 1
     assert schema["properties"]["limit"]["default"] == 25
     assert schema["required"] == ["company", "keyword"]
+
+
+def test_company_candidates_are_cheapest_first():
+    """Each candidate is a throttled request, so order is a cost decision."""
+    cands = server._company_candidates("Goldman Sachs")
+    assert cands[0] == "goldman-sachs"          # resolves most companies in one
+    assert "Goldman-Sachs" in cands             # hyphenated, as Blind writes it
+    assert len(cands) == len(set(cands))        # no wasted duplicate requests
+    assert server._company_candidates("Roku")[0] == "roku"

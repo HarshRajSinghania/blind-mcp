@@ -90,8 +90,19 @@ def _cache_path(url: str) -> Path:
     return CACHE_DIR / host / scope / f"{digest}.html"
 
 
-def _purge_expired() -> int:
-    """Remove cache entries older than CACHE_TTL.  Returns the number removed."""
+_purged_this_process = False
+
+
+def _purge_expired(force: bool = False) -> int:
+    """Remove cache entries older than CACHE_TTL. Returns the number removed.
+
+    Runs once per process: it walks the whole cache tree, which is far too
+    expensive to repeat on every request.
+    """
+    global _purged_this_process
+    if _purged_this_process and not force:
+        return 0
+    _purged_this_process = True
     if not CACHE_DIR.exists():
         return 0
     cutoff = time.time() - CACHE_TTL

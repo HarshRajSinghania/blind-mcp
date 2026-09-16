@@ -160,31 +160,43 @@ def _keywords(text: str) -> list[str]:
     return [w for w in re.findall(r"[a-z0-9]{2,}", text.lower()) if w not in _STOPWORDS]
 
 
+def _company_candidates(company: str) -> list[str]:
+    """Blind URL spellings to try, most-likely first.
+
+    The slug is case-insensitive, so one lowercase-hyphenated candidate covers
+    most companies in a single request -- including multi-word names, which
+    Blind writes with hyphens ('Goldman Sachs' -> 'goldman-sachs'). The
+    remaining forms are fallbacks for names we guess wrong. Order matters:
+    each candidate is a throttled request, so a company that resolves on the
+    first try costs ~1.5s and one that fails costs the whole list.
+    """
+    collapsed = re.sub(r"\s+", "-", company.strip())
+    ordered = [
+        collapsed.lower(),
+        collapsed,
+        collapsed.title(),
+        company.strip(),
+        collapsed.upper(),
+    ]
+    seen: set[str] = set()
+    return [c for c in ordered if c and not (c in seen or seen.add(c))]
+
+
 @lru_cache(maxsize=128)
 def _resolve(company: str) -> str:
-    """Blind company URLs are case-sensitive; try the plausible spellings.
-
-    Multi-word names use hyphens in the Blind URL (e.g. 'Goldman Sachs' ->
-    'Goldman-Sachs').  Both spaces and hyphens are tried so callers can pass
-    either form.
-    """
-    seen = []
-    variants = []
-    # Original and common case forms
-    for name in (company, company.title(), company.capitalize(), company.upper()):
-        variants.extend((name, name.replace(" ", "-")))
-    # Also try the hyphenated form of the original and title-case
-    seen_names = set()
-    for name in variants:
-        if name in seen_names:
-            continue
-        seen_names.add(name)
+    """Find a company's Blind URL segment, trying the likely spellings."""
+    candidates = _company_candidates(company)
+    for name in candidates:
         try:
             http.fetch(f"/company/{name}/posts")
             return name
         except Exception:
             continue
-    raise ValueError(f"No Blind company page found for {company!r} (tried {sorted(seen_names)}).")
+    raise ValueError(
+        f"No Blind company page found for {company!r} (tried {candidates}). "
+        f"Blind writes multi-word names with hyphens, e.g. 'Goldman-Sachs'; "
+        f"if the company trades under a different name there, try that."
+    )
 
 
 @mcp.tool()
