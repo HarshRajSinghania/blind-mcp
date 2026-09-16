@@ -18,7 +18,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from . import ats, http, levels, parse
+from . import ats, fx, http, levels, parse
 
 from . import __version__
 
@@ -386,7 +386,9 @@ def _dominant_currency(postings: list[dict[str, Any]]) -> str | None:
     return _dominant(postings, "currency")
 
 
-def _by_market(priced: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _by_market(
+    priced: list[dict[str, Any]], base: str | None = None
+) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
     """The same role at the same employer, in each currency it is posted in.
 
     An employer subject to pay-transparency law in one market often posts the
@@ -398,20 +400,51 @@ def _by_market(priced: list[dict[str, Any]]) -> list[dict[str, Any]]:
     groups: dict[str, list[dict[str, Any]]] = {}
     for p in priced:
         groups.setdefault(p["pay"]["currency"], []).append(p)
+
+    table = fx.rates(base, ats.USER_AGENT) if base and len(groups) > 1 else None
     out = []
     for currency, rows in groups.items():
         summary = levels.summarise(rows)
         if not summary:
             continue
-        out.append({
+        entry = {
             "currency": currency,
             "postings": len(rows),
             "typical": summary["typical"],
             "distinct_bands": summary["distinct_bands"],
             "locations": sorted({r["location"] for r in rows if r["location"]})[:5],
-        })
+        }
+        # No table means no conversion happened, so emit no converted field
+        # -- an unconverted figure relabelled as the base currency would read
+        # as a comparison that was never made.
+        low = fx.convert(summary["typical"]["min"], currency, base, table) if table else None
+        high = fx.convert(summary["typical"]["max"], currency, base, table) if table else None
+        if low and high:
+            # The published figure stays; this is the estimate beside it.
+            entry[f"typical_in_{base}"] = {"min": round(low), "max": round(high)}
+        out.append(entry)
+
     out.sort(key=lambda r: r["postings"], reverse=True)
-    return out
+    if out and table:
+        anchor = out[0].get(f"typical_in_{base}") or out[0]["typical"]
+        pivot = (anchor["min"] + anchor["max"]) / 2
+        for entry in out[1:]:
+            converted = entry.get(f"typical_in_{base}")
+            if converted and pivot:
+                entry["vs_largest_market"] = round(
+                    (converted["min"] + converted["max"]) / 2 / pivot, 2
+                )
+    meta = {
+        "base": base,
+        "rate_date": table.get("date"),
+        "source": "ECB daily reference rates via frankfurter.dev",
+        "caveat": (
+            "Converted figures are an estimate on the rate date; the published "
+            "figure in its own currency is the fact. Neither adjusts for cost "
+            "of living or tax."
+        ),
+    } if table else None
+    return out, meta
 
 
 def _level_breakdown(postings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -513,6 +546,9 @@ def pay_bands(
     })
 
     by_level = _level_breakdown(priced)
+    markets, fx_meta = _by_market(
+        [p for p in hits if p["pay"] and p["pay"]["interval"] == interval], currency
+    )
     return {
         "company": company,
         "board": board,
@@ -521,7 +557,8 @@ def pay_bands(
         "currency": currency,
         "interval": interval,
         "by_level": by_level,
-        "markets": _by_market([p for p in hits if p["pay"] and p["pay"]["interval"] == interval]),
+        "markets": markets,
+        "fx": fx_meta,
         "band_width_ratio": levels.band_width_ratio(by_level.values()),
         "level_steps": levels.level_steps(by_level),
         "other_currencies_present": other_cur,
