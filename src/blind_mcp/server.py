@@ -18,7 +18,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from . import ats, http, parse
+from . import ats, http, levels, parse
 
 from . import __version__
 
@@ -374,24 +374,30 @@ def research(company: str, question: str, max_posts: int = 4) -> dict[str, Any]:
 # ---------------------------------------------------------------- pay ranges
 
 
-def _summarise(band: list[dict[str, Any]]) -> dict[str, Any] | None:
-    if not band:
-        return None
-    lows = sorted(p["pay"]["min"] for p in band)
-    highs = sorted(p["pay"]["max"] for p in band)
-    return {
-        "low": lows[0],
-        "high": highs[-1],
-        "median_low": lows[len(lows) // 2],
-        "median_high": highs[len(highs) // 2],
-        "currency": band[0]["pay"]["currency"],
-        "from_postings": len(band),
+def _dominant_currency(postings: list[dict[str, Any]]) -> str | None:
+    counts: dict[str, int] = {}
+    for p in postings:
+        if p.get("pay"):
+            counts[p["pay"]["currency"]] = counts.get(p["pay"]["currency"], 0) + 1
+    return max(counts, key=counts.get) if counts else None
+
+
+def _level_breakdown(postings: list[dict[str, Any]]) -> dict[str, Any]:
+    buckets: dict[str, list[dict[str, Any]]] = {}
+    for p in postings:
+        buckets.setdefault(levels.classify(p["title"]), []).append(p)
+    by_level = {
+        lvl: levels.summarise(rows)
+        for lvl in levels.ORDER
+        if (rows := buckets.get(lvl)) and levels.summarise(rows)
     }
+    return by_level
 
 
 @mcp.tool()
 def job_openings(
-    company: str, role: str = "", with_pay_only: bool = False, limit: int = 25
+    company: str, role: str = "", with_pay_only: bool = False,
+    limit: int = 25, board: str = "",
 ) -> dict[str, Any]:
     """List a company's open roles, with the pay range where one is published.
 
@@ -402,10 +408,12 @@ def job_openings(
     Not every employer is reachable: Google, Meta, Amazon and Apple self-host
     their careers sites and are not on these boards.
     """
-    board, postings = ats.fetch_postings(company)
+    board, postings = ats.fetch_postings(company, board or None)
     hits = ats.matching(postings, role) if role else postings
     if with_pay_only:
         hits = [p for p in hits if p["pay"]]
+    for p in hits[:limit]:
+        p["level"] = levels.classify(p["title"])
     return {
         "company": company,
         "board": board,
@@ -417,62 +425,126 @@ def job_openings(
 
 
 @mcp.tool()
-def pay_bands(company: str, role: str) -> dict[str, Any]:
-    """What a role actually pays, including where the employer publishes nothing.
+def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
+    """What a role pays at one company, broken down by seniority.
 
     Colorado, California, New York, Washington and Illinois require a salary
-    range on covered postings. India, Singapore and most of the EU require
-    none. So the same title at the same company is posted with a band in
-    Denver and without one in Bengaluru -- and the published band is a far
-    better anchor for the unpublished one than any salary-survey guess, because
-    it is the same employer, the same title, the same moment.
+    range on covered postings; India, Singapore and most of the EU require
+    none. So the same title at the same company carries a band in Denver and
+    nothing in Bengaluru, and the published one is the best available anchor
+    for the silent one -- same employer, same title, same week.
 
-    Returns the published band, the locations that carry it, and the locations
-    advertising the same title with nothing attached.
+    Bands are reported per level, because a single range across seniorities is
+    a number nobody is offered: "forward deployed" at Databricks spans
+    140,400-320,200 undivided, but resolves into a mid band, a senior band
+    carried by 48 postings, and several management bands.
+
+    `typical` is the modal band -- the one the most postings carry -- and is
+    usually what you want. `distinct_bands` versus `postings` shows how much
+    independent evidence there is: 48 postings sharing one band is one data
+    point advertised 48 times, not 48 data points.
     """
-    board, postings = ats.fetch_postings(company)
+    board, postings = ats.fetch_postings(company, board or None)
     hits = ats.matching(postings, role)
     if not hits:
-        titles = sorted({p["title"] for p in postings})[:12]
         return {
-            "company": company,
-            "board": board,
-            "role": role,
-            "matched": 0,
+            "company": company, "board": board, "role": role, "matched": 0,
             "note": f"No open title contains all of {role!r}.",
-            "sample_titles": titles,
+            "sample_titles": sorted({p["title"] for p in postings})[:12],
         }
 
-    published = [p for p in hits if p["pay"]]
+    currency = _dominant_currency(hits)
+    priced = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
     silent = [p for p in hits if not p["pay"]]
-    by_currency: dict[str, list[dict[str, Any]]] = {}
-    for p in published:
-        by_currency.setdefault(p["pay"]["currency"], []).append(p)
+    other_cur = sorted({
+        p["pay"]["currency"] for p in hits if p["pay"] and p["pay"]["currency"] != currency
+    })
 
+    by_level = _level_breakdown(priced)
     return {
         "company": company,
         "board": board,
         "role": role,
         "matched": len(hits),
-        "bands": {cur: _summarise(rows) for cur, rows in by_currency.items()},
-        "publishing": [
-            {
-                "title": p["title"],
-                "location": p["location"],
-                "pay": f"{p['pay']['currency']} {p['pay']['min']:,.0f}-{p['pay']['max']:,.0f}",
-                "url": p["url"],
-            }
-            for p in published[:15]
-        ],
-        "no_range_published": [
-            {"title": p["title"], "location": p["location"], "url": p["url"]}
+        "currency": currency,
+        "by_level": by_level,
+        "band_width_ratio": levels.band_width_ratio(by_level.values()),
+        "level_steps": levels.level_steps(by_level),
+        "other_currencies_present": other_cur,
+        "publishes_no_range": [
+            {"title": p["title"], "level": levels.classify(p["title"]),
+             "location": p["location"], "url": p["url"]}
             for p in silent[:15]
         ],
+        "no_range_count": len(silent),
         "note": (
-            f"{len(published)} of {len(hits)} matching postings carry a range. "
-            f"Where none is published the band above is the closest available "
-            f"anchor -- same employer, same title -- but it is a US-market "
-            f"figure and does not transfer to another country at face value."
+            f"{len(priced)} of {len(hits)} matching postings publish a range. "
+            f"Bands are US-market figures and do not convert to another country "
+            f"at face value; `level_steps` travels better than the absolutes. "
+            f"Seniority is inferred from the title -- check `titles` on each "
+            f"level, since role names like 'Engagement Manager' can read as "
+            f"management when they are not. Check `precision` before relying "
+            f"on a band: 'wide' means the employer published one range across "
+            f"several levels and it narrows little."
+        ),
+    }
+
+
+@mcp.tool()
+def market_rate(
+    role: str, companies: list[str], level: str = ""
+) -> dict[str, Any]:
+    """Compare what a role pays across several companies at the same seniority.
+
+    One company's band tells you what that company pays; several tell you
+    whether an offer is competitive. Pass `level` (mid, senior, staff, lead,
+    principal, manager, senior_manager, director) to compare like with like --
+    without it, each company's largest band is used, which may not be the
+    same rung.
+
+    Companies not on Greenhouse, Ashby or Lever are listed under
+    `unreachable` rather than silently dropped.
+    """
+    rows, unreachable = [], []
+    for company in companies[:12]:
+        try:
+            board, postings = ats.fetch_postings(company)
+        except Exception as exc:
+            unreachable.append({"company": company, "reason": type(exc).__name__})
+            continue
+        hits = ats.matching(postings, role)
+        currency = _dominant_currency(hits)
+        priced = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
+        if not priced:
+            unreachable.append({"company": company, "reason": "no published range"})
+            continue
+        by_level = _level_breakdown(priced)
+        chosen = level if level and level in by_level else max(
+            by_level, key=lambda k: by_level[k]["postings"]
+        )
+        band = by_level[chosen]
+        rows.append({
+            "company": company,
+            "level": chosen,
+            "typical": band["typical"],
+            "currency": currency,
+            "postings": band["postings"],
+            "distinct_bands": band["distinct_bands"],
+            "example_titles": band["titles"][:3],
+            "matched_requested_level": bool(level) and chosen == level,
+        })
+
+    rows.sort(key=lambda r: (r["typical"]["min"] + r["typical"]["max"]) / 2, reverse=True)
+    return {
+        "role": role,
+        "level_requested": level or None,
+        "compared": len(rows),
+        "rates": rows,
+        "unreachable": unreachable,
+        "note": (
+            "Sorted by band midpoint. Rows where matched_requested_level is "
+            "false fell back to the company's largest band and may be a "
+            "different rung -- read `level` before comparing them."
         ),
     }
 

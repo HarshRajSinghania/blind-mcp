@@ -177,12 +177,31 @@ def board_slugs(company: str) -> list[str]:
     return [s for s in (collapsed, hyphen, base) if s and not (s in seen or seen.add(s))]
 
 
-def fetch_postings(company: str) -> tuple[str, list[dict[str, Any]]]:
+def fetch_postings(
+    company: str, board: str | None = None
+) -> tuple[str, list[dict[str, Any]]]:
     """Find a company's public job board and return every posting on it.
 
-    Tries Greenhouse, then Ashby, then Lever, against each plausible slug.
-    Raises BoardNotFound if none of them answer.
+    Tries Greenhouse, then Ashby, then Lever against each plausible slug. Pass
+    `board` as "greenhouse:slug" (or ashby:/lever:) to skip the guessing when
+    the token does not follow from the company name -- it is visible in the
+    careers-page URL, e.g. job-boards.greenhouse.io/<slug>.
+
+    Raises BoardNotFound if nothing answers.
     """
+    if board:
+        name, _, slug = board.partition(":")
+        loader = dict(_BOARDS).get(name)
+        if not loader:
+            raise ValueError(
+                f"Unknown board {name!r}; expected one of "
+                f"{', '.join(n for n, _ in _BOARDS)}."
+            )
+        postings = loader(slug or board_slugs(company)[0])
+        if not postings:
+            raise BoardNotFound(f"{board} has no postings.")
+        return f"{name}:{slug}", postings
+
     for slug in board_slugs(company):
         for name, loader in _BOARDS:
             try:
@@ -193,8 +212,13 @@ def fetch_postings(company: str) -> tuple[str, list[dict[str, Any]]]:
                 return f"{name}:{slug}", postings
     raise BoardNotFound(
         f"No public Greenhouse, Ashby or Lever board found for {company!r} "
-        f"(tried {board_slugs(company)}). Large employers often self-host -- "
-        f"Google, Meta, Amazon and Apple are not on these boards."
+        f"(tried slugs {board_slugs(company)}). Two common reasons: the board "
+        f"token differs from the company name -- open their careers page and "
+        f"read it out of the URL (job-boards.greenhouse.io/<slug>, "
+        f"jobs.ashbyhq.com/<slug>, jobs.lever.co/<slug>), then pass "
+        f"board='greenhouse:<slug>' -- or the employer self-hosts and is on "
+        f"none of these boards, which is the case for Google, Meta, Amazon "
+        f"and Apple."
     )
 
 

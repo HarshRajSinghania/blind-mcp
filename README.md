@@ -18,15 +18,29 @@ The band is still there. It is just attached to a different listing.
 ```
 pay_bands(company="Databricks", role="forward deployed")
 
-  101 matching openings · 68 publish a range
-  USD 140,400 – 320,200   (median 182,000 – 250,208)
+  101 matching openings · band width ratio x1.37 · 33 publish no range
 
-  PUBLISHES A RANGE                      PUBLISHES NOTHING (same title)
-    $152,900–210,155  United States        Remote - India
-    $182,000–250,208  MD; VA; D.C.         Seoul, South Korea
-    $211,800–291,300  Remote - D.C.        London, United Kingdom
-    $178,800–245,850  Central - US         Berlin; Munich
+  LEVEL            TYPICAL BAND        BANDS  POSTS  PRECISION
+  mid              152,900–210,155         2      3  tight
+  senior           182,000–250,208         1     58  tight
+  lead             178,800–245,850         1      1  tight
+  manager          211,800–291,300         4      5  tight
+  senior_manager   232,900–320,200         1      1  tight
+
+  steps: mid→senior +19.1% · lead→manager +18.5% · manager→sr_mgr +9.9%
+  silent: Remote-India, Seoul, London, Berlin, Amsterdam
 ```
+
+Per level, because one range across seniorities is a number nobody is
+offered — undivided, that role reads as `140,400–320,200`, a 2.3x spread
+covering five different jobs.
+
+`typical` is the modal band. **`distinct_bands` vs `postings` is the honest
+measure of evidence**: 58 postings sharing one band is one data point
+advertised 58 times. `precision` flags how much a band actually narrows
+things — Databricks posts tight per-level bands, Figma posts a single x2.5
+band spanning its whole ladder, and both are real.
+
 
 That is the same employer, the same title, the same moment — a far better
 anchor for an unpublished number than any salary survey, and it takes one call.
@@ -72,10 +86,19 @@ Measured, not estimated:
 | Notion | Ashby | 127 | 71 (55%) |
 | Stripe | Greenhouse | 647 | 21 (3%) |
 
-**Not covered:** employers who self-host their careers site — Google, Meta,
-Amazon, Apple, Atlassian, Canva — and most Indian-headquartered companies.
-`fetch_postings` raises `BoardNotFound` and says so rather than returning
-nothing. Adding an adapter is [#13](https://github.com/dheerajjha/blind-mcp/issues/13).
+**Not covered:** employers who self-host — Google, Meta, Amazon, Apple — and
+most Indian-headquartered companies. `BoardNotFound` explains the two causes
+rather than just failing.
+
+If a company *is* on one of these boards under a token you can't guess, read
+it out of their careers URL and pass it directly:
+
+```
+pay_bands("Some Rebranded Co", "engineer", board="greenhouse:theirslug")
+```
+
+Adding a Workday or SmartRecruiters adapter is
+[#13](https://github.com/dheerajjha/blind-mcp/issues/13).
 
 ## Install
 

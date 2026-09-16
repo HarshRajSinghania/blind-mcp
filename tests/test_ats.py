@@ -69,12 +69,33 @@ def test_board_slugs_are_ordered_and_unique():
 
 
 def test_summarise_spans_the_whole_band():
+    from blind_mcp import levels
     band = [
-        {"pay": {"min": 100.0, "max": 200.0, "currency": "USD"}},
-        {"pay": {"min": 150.0, "max": 300.0, "currency": "USD"}},
-        {"pay": {"min": 120.0, "max": 250.0, "currency": "USD"}},
+        {"title": "Engineer", "pay": {"min": 100.0, "max": 200.0, "currency": "USD"}},
+        {"title": "Engineer", "pay": {"min": 150.0, "max": 300.0, "currency": "USD"}},
+        {"title": "Engineer", "pay": {"min": 120.0, "max": 250.0, "currency": "USD"}},
     ]
-    from blind_mcp.server import _summarise
-    s = _summarise(band)
+    s = levels.summarise(band)
     assert (s["low"], s["high"]) == (100.0, 300.0)
-    assert s["from_postings"] == 3
+    assert s["postings"] == 3
+    assert s["distinct_bands"] == 3
+
+
+def test_explicit_board_rejects_unknown_provider():
+    import pytest
+    with pytest.raises(ValueError, match="Unknown board"):
+        ats.fetch_postings("Acme", board="workday:acme")
+
+
+def test_board_not_found_explains_how_to_recover():
+    """A dead end should say what to do next, not just that it failed."""
+    try:
+        ats._BOARDS_ORIGINAL = ats._BOARDS
+        ats._BOARDS = ()               # force every loader to be skipped
+        ats.fetch_postings("Nonexistent Co")
+    except ats.BoardNotFound as exc:
+        msg = str(exc)
+        assert "board='greenhouse:<slug>'" in msg   # the recovery path
+        assert "self-host" in msg                    # the other explanation
+    finally:
+        ats._BOARDS = ats._BOARDS_ORIGINAL
