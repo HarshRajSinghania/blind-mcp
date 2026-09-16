@@ -81,3 +81,24 @@ def test_reversed_and_empty_input():
     assert band("$210,155 — $152,900 USD salary") == (152900, 210155, "USD", "year")
     assert parse(None) is None
     assert parse("") is None
+
+
+def test_on_target_earnings_are_not_base_pay():
+    """Monzo publishes both; averaging OTE into a base band overstates salary."""
+    ote = parse("\U0001f4b0£67,000 Total OTE (base salary + commission)")
+    assert ote["basis"] == "ote"
+    assert parse("£85,000 - £110,000 + Incentive Awards")["basis"] == "base"
+
+
+def test_a_qualifier_does_not_cross_a_clause_boundary():
+    """A posting that lists both must not have the base figure read as OTE."""
+    both = parse("Base salary $120,000 - $150,000; OTE $200,000 - $250,000")
+    assert (both["min"], both["max"], both["basis"]) == (120000, 150000, "base")
+
+    reversed_order = parse(
+        "OTE of $200,000 - $250,000 with a base salary of $120,000 - $150,000"
+    )
+    assert (reversed_order["min"], reversed_order["basis"]) == (120000, "base")
+
+    sentences = parse("The OTE is $180,000. Base salary is $120,000 - $140,000.")
+    assert (sentences["min"], sentences["basis"]) == (120000, "base")

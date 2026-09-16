@@ -229,6 +229,22 @@ posts joined to employers and nicknames.
 
 ## Reading the output
 
+Four things the output says that are easy to skim past:
+
+- **`distinct_bands` vs `postings`** — 58 postings sharing one band is one data
+  point advertised 58 times.
+- **`precision`** — `wide` means the employer published one range across
+  several levels, so it narrows almost nothing.
+- **`not_checked_count`** — postings whose range we did not look at, kept
+  apart from ones the employer genuinely left blank. Raise `max_lookups`.
+- **`on_target_earnings_excluded`** — sales roles often publish OTE, which is
+  base plus commission. Those are reported separately, never averaged into a
+  base band.
+
+Converted figures are estimates on a dated exchange rate, and adjust for
+neither cost of living nor tax. The published figure in its own currency is
+the fact; the conversion is there so the comparison is not nonsense.
+
 Blind is anonymous and unverified. Weight claims by the commenter's employer
 (`company` on each comment) and treat a single loud voice as one data point. In
 testing, the Roku India RTO answer was corroborated by two independent

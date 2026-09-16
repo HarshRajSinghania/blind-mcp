@@ -27,6 +27,7 @@ def test_greenhouse_double_escaped_pay_element():
         "max": 210155.0,
         "currency": "USD",
         "interval": "year",
+        "basis": "base",
         "source": "posting_pay_field",
     }
 

@@ -4,11 +4,17 @@ Two steps, in order. The second depends on the first.
 
 ## 1. PyPI
 
-The name `blind-mcp` is unclaimed as of this writing.
+Publishing is not a manual step. Pushing a `v*` tag runs
+[`release.yml`](.github/workflows/release.yml), which publishes to PyPI over
+Trusted Publishing — GitHub's OIDC identity, no API token stored anywhere.
+The job refuses to publish unless the tests pass **and** the tag matches the
+version in the package, so a mistyped tag fails loudly rather than shipping
+the wrong thing.
 
 ```bash
-uv build
-uv publish            # needs a PyPI API token: UV_PUBLISH_TOKEN or --token
+git tag v0.4.0
+git push origin v0.4.0
+gh run watch          # or: gh run list --workflow=release.yml
 ```
 
 Bump `version` in **three** places or the registry will reject the submission:

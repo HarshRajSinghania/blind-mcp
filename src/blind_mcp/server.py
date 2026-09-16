@@ -544,19 +544,28 @@ def pay_bands(
             "sample_titles": sorted({p["title"] for p in postings})[:12],
         }
 
-    currency = _dominant_currency(hits)
-    same_currency = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
+    # On-target earnings are base plus commission. A sales role's OTE in the
+    # same band as an engineer's base overstates what the job pays in salary,
+    # so it is reported separately rather than averaged in.
+    on_target = [p for p in hits if p["pay"] and p["pay"].get("basis") == "ote"]
+    base_pay = [p for p in hits if not (p["pay"] and p["pay"].get("basis") == "ote")]
+
+    currency = _dominant_currency(base_pay)
+    same_currency = [
+        p for p in base_pay if p["pay"] and p["pay"]["currency"] == currency
+    ]
     # An hourly contract rate averaged into a band of annual salaries produces
     # a number that is wrong rather than merely imprecise, so the two never mix.
     interval = _dominant(same_currency, "interval")
     priced = [p for p in same_currency if p["pay"]["interval"] == interval]
-    silent = [p for p in hits if not p["pay"] and p.get("pay_known", True)]
+    silent = [p for p in base_pay if not p["pay"] and p.get("pay_known", True)]
     # Boards that hide pay behind a second request are only checked up to
     # max_lookups. Counting the rest as "publishes nothing" would be a claim
     # about the employer that we never actually tested.
-    unchecked = [p for p in hits if not p["pay"] and not p.get("pay_known", True)]
+    unchecked = [p for p in base_pay if not p["pay"] and not p.get("pay_known", True)]
     other_cur = sorted({
-        p["pay"]["currency"] for p in hits if p["pay"] and p["pay"]["currency"] != currency
+        p["pay"]["currency"] for p in base_pay
+        if p["pay"] and p["pay"]["currency"] != currency
     })
     other_int = sorted({
         p["pay"]["interval"] for p in same_currency if p["pay"]["interval"] != interval
@@ -564,7 +573,8 @@ def pay_bands(
 
     by_level = _level_breakdown(priced)
     markets, fx_meta = _by_market(
-        [p for p in hits if p["pay"] and p["pay"]["interval"] == interval], currency
+        [p for p in base_pay if p["pay"] and p["pay"]["interval"] == interval],
+        currency,
     )
     return {
         "company": company,
@@ -587,6 +597,11 @@ def pay_bands(
         ],
         "no_range_count": len(silent),
         "not_checked_count": len(unchecked),
+        "on_target_earnings_excluded": [
+            {"title": p["title"], "published": p["pay"]["min"],
+             "currency": p["pay"]["currency"], "url": p["url"]}
+            for p in on_target[:5]
+        ],
         "note": (
             f"{len(priced)} of {len(hits)} matching postings publish a {interval}ly "
             f"range in {currency}. `by_level` covers that currency only; "
@@ -639,6 +654,7 @@ def market_rate(
             continue
         hits = ats.matching(postings, role)
         ats.enrich_pay(hits, limit=25)
+        hits = [p for p in hits if not (p["pay"] and p["pay"].get("basis") == "ote")]
         currency = _dominant_currency(hits)
         priced = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
         if not priced:

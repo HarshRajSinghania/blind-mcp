@@ -83,11 +83,21 @@ _NOT_SALARY = re.compile(
     r"funding|raised|valuation|arr\b|in\s+savings|discount)\b",
     re.I,
 )
-# Words that mark it as base pay. A match near one of these wins ties.
+# Words that mark it as pay. A match near one of these wins ties.
 _IS_SALARY = re.compile(
     r"\b(salary|salaries|base\s+pay|base\s+compensation|pay\s+range|"
     r"compensation\s+range|salary\s+range|annual\s+pay|target\s+earnings|"
-    r"remuneration|total\s+cash|pay\s+band|zone\s*\d|on-?target)\b",
+    r"remuneration|total\s+cash|pay\s+band|zone\s*\d|on-?target|ote)\b",
+    re.I,
+)
+
+# ...but on-target earnings are base plus commission, so a sales role's
+# "£67,000 Total OTE" is not comparable with an engineer's base band. Monzo
+# publishes both, and averaging them together overstates base pay.
+_ON_TARGET = re.compile(
+    r"\b(ote|on-?target\s+earnings|total\s+target\s+(?:cash|compensation)|"
+    r"base\s*\+\s*commission|plus\s+commission|including\s+commission|"
+    r"inclusive\s+of\s+commission)\b",
     re.I,
 )
 
@@ -104,6 +114,24 @@ _LEVEL_TAG = re.compile(
 # Postings are typed by humans: "£150, 000 - £200, 000" appears verbatim on
 # Monzo. Close the gap before matching rather than letting a space end a number.
 _STRAY_SPACE = re.compile(r"(\d,)\s+(\d{3})\b")
+
+# A qualifier belongs to the clause it sits in. "Base salary $120,000 -
+# $150,000; OTE $200,000 - $250,000" publishes both, and a window that runs
+# past the semicolon labels the base figure as on-target earnings.
+_CLAUSE = re.compile(r"[.;|\n•·]|\s{3,}")
+
+
+def _clause_around(text: str, start: int, end: int, back: int, fwd: int) -> str:
+    left = text[max(0, start - back) : start]
+    right = text[end : end + fwd]
+    breaks = list(_CLAUSE.finditer(left))
+    if breaks:
+        left = left[breaks[-1].end():]
+    stop = _CLAUSE.search(right)
+    if stop:
+        right = right[: stop.start()]
+    return left + text[start:end] + right
+
 
 _NUM = r"\d[\d.,]*"
 _SYM_RE = "|".join(re.escape(s) for s in sorted(_SYMBOL, key=len, reverse=True))
@@ -190,6 +218,9 @@ def _candidates(text: str) -> list[dict[str, Any]]:
             continue
         window = text[max(0, match.start() - 180) : match.end() + 180]
         veto = text[max(0, match.start() - 60) : match.end() + 25]
+        # Tighter still, and clause-bounded: "OTE" qualifies the figure it is
+        # touching, not the one in the next clause along.
+        basis_window = _clause_around(text, match.start(), match.end(), 30, 30)
         currency = _currency(match, window)
         if not currency:
             continue  # two bare numbers are a date range or a req id
@@ -214,6 +245,7 @@ def _candidates(text: str) -> list[dict[str, Any]]:
             "currency": currency,
             "interval": interval,
             "salary_context": bool(_IS_SALARY.search(window)),
+            "basis": "ote" if _ON_TARGET.search(basis_window) else "base",
             "label": " ".join(tag.group(1).split()).title() if tag else None,
             "at": match.start(),
         })
@@ -239,6 +271,7 @@ def _points(text: str) -> list[dict[str, Any]]:
         if value is None:
             continue
         near = text[max(0, match.start() - 40) : match.end() + 40]
+        basis_window = _clause_around(text, match.start(), match.end(), 30, 30)
         if not _IS_SALARY.search(near) or _NOT_SALARY.search(near):
             continue
         currency = _currency_single(match, near)
@@ -252,6 +285,7 @@ def _points(text: str) -> list[dict[str, Any]]:
         out.append({
             "min": value, "max": value, "currency": currency,
             "interval": interval, "salary_context": True,
+            "basis": "ote" if _ON_TARGET.search(basis_window) else "base",
             "label": None, "at": match.start(),
         })
     return out
@@ -293,7 +327,10 @@ def parse(content: str | None, prefer: str | None = None) -> dict[str, Any] | No
 
     # A figure the posting calls a salary beats one it does not, and an
     # earlier match beats a later one, since boilerplate trails the body.
-    best = min(candidates, key=lambda c: (not c["salary_context"], c["at"]))
+    best = min(
+        candidates,
+        key=lambda c: (c["basis"] != "base", not c["salary_context"], c["at"]),
+    )
     siblings = [
         c for c in candidates
         if c is not best
@@ -310,6 +347,7 @@ def _finish(cand: dict[str, Any], siblings: list[dict[str, Any]], source: str) -
         "max": cand["max"],
         "currency": cand["currency"],
         "interval": cand["interval"],
+        "basis": cand.get("basis", "base"),
         "source": source,
     }
     if cand["label"] or siblings:
