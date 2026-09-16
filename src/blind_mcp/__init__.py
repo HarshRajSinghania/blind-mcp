@@ -1,3 +1,3 @@
-"""Read Blind (teamblind.com) company discussions from MCP."""
+"""Pay bands from public job boards, plus Blind company research."""
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

@@ -1,7 +1,7 @@
 [project]
 name = "blind-mcp"
-version = "0.1.0"
-description = "MCP server for researching companies on Blind (teamblind.com)"
+version = "0.1.1"
+description = "Find what a role actually pays, including in markets where the employer publishes nothing -- reads public job-board APIs (Greenhouse, Ashby, Lever) to surface the salary band attached to the same title elsewhere."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
