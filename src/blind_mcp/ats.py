@@ -19,7 +19,10 @@ import urllib.error
 import urllib.request
 from typing import Any, Iterable
 
-USER_AGENT = "blind-mcp/0.1.0 (+https://github.com/dheerajjha/blind-mcp)"
+from . import money
+from .__init__ import __version__
+
+USER_AGENT = f"blind-mcp/{__version__} (+https://github.com/dheerajjha/blind-mcp)"
 TIMEOUT = 30
 
 GREENHOUSE = "https://boards-api.greenhouse.io/v1/boards/{board}/jobs?content=true"
@@ -27,15 +30,9 @@ LEVER = "https://api.lever.co/v0/postings/{board}?mode=json"
 ASHBY = "https://api.ashbyhq.com/posting-api/job-board/{board}?includeCompensation=true"
 
 # Greenhouse renders the legally-required range into its own element. Reading
-# that is far more reliable than finding two dollar figures in prose.
+# that is far more reliable than finding two figures in prose, so it is handed
+# to the parser as the preferred region.
 _PAY_DIV = re.compile(r'<div class="pay-range">(.*?)</div>', re.S)
-# Fallback for boards that inline the range in the body text instead.
-_PAY_TEXT = re.compile(
-    r"\$\s*([\d,]+(?:\.\d+)?)\s*(?:k\b)?\s*[-–—]{1,2}\s*\$?\s*([\d,]+(?:\.\d+)?)\s*(?:k\b)?",
-    re.I,
-)
-_CURRENCY = re.compile(r"\b(USD|CAD|GBP|EUR|INR|SGD|AUD)\b")
-_TAG = re.compile(r"<[^>]+>")
 
 
 class BoardNotFound(LookupError):
@@ -54,37 +51,11 @@ def _get(url: str) -> Any:
         raise
 
 
-def _text(content: str | None) -> str:
-    """Greenhouse ships HTML-escaped markup: unescape first, then drop tags."""
-    return _TAG.sub(" ", _html.unescape(content or ""))
-
-
-def _money(raw: str) -> float:
-    value = float(raw.replace(",", ""))
-    return value * 1000 if value < 1000 else value  # "$152k" style
-
-
 def _pay_from_html(content: str | None) -> dict[str, Any] | None:
+    """Published range for a posting, in whatever currency it is published in."""
     raw = _html.unescape(content or "")
     block = _PAY_DIV.search(raw)
-    # Two passes are needed. Greenhouse double-escapes: the first unescape
-    # turns &lt;div&gt; into real markup but leaves &mdash; as an entity, and
-    # the figures are separated by that entity plus tags, not whitespace.
-    region = _html.unescape(_TAG.sub(" ", block.group(1) if block else raw))
-    match = _PAY_TEXT.search(region)
-    if not match:
-        return None
-    low, high = _money(match.group(1)), _money(match.group(2))
-    if low > high:
-        low, high = high, low
-    currency = _CURRENCY.search(region)
-    return {
-        "min": low,
-        "max": high,
-        "currency": currency.group(1) if currency else "USD",
-        "interval": "year",
-        "source": "posting_pay_field" if block else "posting_text",
-    }
+    return money.parse(content, prefer=block.group(1) if block else None)
 
 
 def _posting(title, location, url, pay, company, board) -> dict[str, Any]:

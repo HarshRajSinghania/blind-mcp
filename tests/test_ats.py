@@ -38,8 +38,7 @@ def test_pay_falls_back_to_body_text():
 
 
 def test_k_suffixed_and_reversed_ranges_are_normalised():
-    assert ats._money("152") == 152000.0     # "$152k"
-    assert ats._money("152,900") == 152900.0
+    assert ats._pay_from_html("<p>Salary $152k - $200k</p>")["min"] == 152000.0
     pay = ats._pay_from_html("<p>$210,155 — $152,900 USD</p>")
     assert pay["min"] < pay["max"]
 

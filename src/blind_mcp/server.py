@@ -374,12 +374,44 @@ def research(company: str, question: str, max_posts: int = 4) -> dict[str, Any]:
 # ---------------------------------------------------------------- pay ranges
 
 
-def _dominant_currency(postings: list[dict[str, Any]]) -> str | None:
+def _dominant(postings: list[dict[str, Any]], field: str) -> str | None:
     counts: dict[str, int] = {}
     for p in postings:
         if p.get("pay"):
-            counts[p["pay"]["currency"]] = counts.get(p["pay"]["currency"], 0) + 1
+            counts[p["pay"][field]] = counts.get(p["pay"][field], 0) + 1
     return max(counts, key=counts.get) if counts else None
+
+
+def _dominant_currency(postings: list[dict[str, Any]]) -> str | None:
+    return _dominant(postings, "currency")
+
+
+def _by_market(priced: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """The same role at the same employer, in each currency it is posted in.
+
+    An employer subject to pay-transparency law in one market often posts the
+    same job in several. Anthropic advertises a software engineer band in USD,
+    GBP and EUR; reading only the dominant currency threw two of those away.
+    Ratios between them are the closest thing to a published answer for what
+    the same job is worth in a market that requires no disclosure at all.
+    """
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for p in priced:
+        groups.setdefault(p["pay"]["currency"], []).append(p)
+    out = []
+    for currency, rows in groups.items():
+        summary = levels.summarise(rows)
+        if not summary:
+            continue
+        out.append({
+            "currency": currency,
+            "postings": len(rows),
+            "typical": summary["typical"],
+            "distinct_bands": summary["distinct_bands"],
+            "locations": sorted({r["location"] for r in rows if r["location"]})[:5],
+        })
+    out.sort(key=lambda r: r["postings"], reverse=True)
+    return out
 
 
 def _level_breakdown(postings: list[dict[str, Any]]) -> dict[str, Any]:
@@ -454,10 +486,17 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
         }
 
     currency = _dominant_currency(hits)
-    priced = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
+    same_currency = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
+    # An hourly contract rate averaged into a band of annual salaries produces
+    # a number that is wrong rather than merely imprecise, so the two never mix.
+    interval = _dominant(same_currency, "interval")
+    priced = [p for p in same_currency if p["pay"]["interval"] == interval]
     silent = [p for p in hits if not p["pay"]]
     other_cur = sorted({
         p["pay"]["currency"] for p in hits if p["pay"] and p["pay"]["currency"] != currency
+    })
+    other_int = sorted({
+        p["pay"]["interval"] for p in same_currency if p["pay"]["interval"] != interval
     })
 
     by_level = _level_breakdown(priced)
@@ -467,10 +506,13 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
         "role": role,
         "matched": len(hits),
         "currency": currency,
+        "interval": interval,
         "by_level": by_level,
+        "markets": _by_market([p for p in hits if p["pay"] and p["pay"]["interval"] == interval]),
         "band_width_ratio": levels.band_width_ratio(by_level.values()),
         "level_steps": levels.level_steps(by_level),
         "other_currencies_present": other_cur,
+        "other_intervals_present": other_int,
         "publishes_no_range": [
             {"title": p["title"], "level": levels.classify(p["title"]),
              "location": p["location"], "url": p["url"]}
@@ -478,9 +520,12 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
         ],
         "no_range_count": len(silent),
         "note": (
-            f"{len(priced)} of {len(hits)} matching postings publish a range. "
-            f"Bands are US-market figures and do not convert to another country "
-            f"at face value; `level_steps` travels better than the absolutes. "
+            f"{len(priced)} of {len(hits)} matching postings publish a {interval}ly "
+            f"range in {currency}. `by_level` covers that currency only; "
+            f"`markets` shows every currency this role is posted in, which is "
+            f"the like-for-like way to compare countries -- same employer, same "
+            f"title, same week. Figures do not convert at face value; "
+            f"`level_steps` and market ratios travel better than absolutes. "
             f"Seniority is inferred from the title -- check `titles` on each "
             f"level, since role names like 'Engagement Manager' can read as "
             f"management when they are not. Check `precision` before relying "
