@@ -1,0 +1,44 @@
+# Publishes the final blind-mcp release: the shim in legacy/, which depends on
+# payband-mcp and re-exports it so installs under the old name keep working.
+#
+# Run once, by hand, and never again -- there is nothing in legacy/ that will
+# need a second version. It is deliberately not tag-triggered, so cutting a
+# normal release can never republish it by accident.
+#
+# Requires the blind-mcp project's Trusted Publisher on PyPI to name this
+# repository (payband-mcp). It still names the old repository name until
+# someone updates it, and the publish step will fail with a mismatch if not.
+name: release-legacy
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "publish blind-mcp" to confirm'
+        required: true
+
+jobs:
+  publish:
+    if: inputs.confirm == 'publish blind-mcp'
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: The shim must import the package it points at
+        run: |
+          uv venv
+          uv pip install .
+          uv pip install --no-deps ./legacy
+          uv run python -c "
+          import warnings, blind_mcp
+          from blind_mcp import money
+          assert money.parse('Salary 120,000 USD - 150,000 USD')['min'] == 120000
+          print('shim re-exports payband_mcp', blind_mcp.__version__)
+          "
+      - run: uv build --project legacy --out-dir legacy/dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: legacy/dist/

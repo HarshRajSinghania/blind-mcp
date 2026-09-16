@@ -1,0 +1,33 @@
+# The final blind-mcp release: a shim that installs payband-mcp and re-exports
+# it, so `pip install blind-mcp` and `import blind_mcp` keep working for anyone
+# who installed the project under its old name. Built and published separately
+# from the real package -- see .github/workflows/release-legacy.yml.
+[project]
+name = "blind-mcp"
+version = "0.4.3"
+description = "Renamed to payband-mcp. Installing this installs payband-mcp; please depend on that instead."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["payband-mcp>=0.5.0"]
+keywords = ["mcp", "deprecated", "renamed", "payband-mcp"]
+classifiers = [
+    "Development Status :: 7 - Inactive",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+]
+
+[project.urls]
+Homepage = "https://github.com/dheerajjha/payband-mcp"
+"Renamed to" = "https://pypi.org/project/payband-mcp/"
+
+[project.scripts]
+blind-mcp = "payband_mcp.server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["blind_mcp"]
