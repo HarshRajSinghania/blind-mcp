@@ -1,6 +1,6 @@
 [project]
 name = "blind-mcp"
-version = "0.4.1"
+version = "0.4.2"
 description = "Find what a role actually pays, including where the employer publishes nothing -- reads public job-board APIs (Greenhouse, Ashby, Lever, Workday) for published salary bands, per seniority and per currency."
 readme = "README.md"
 requires-python = ">=3.10"

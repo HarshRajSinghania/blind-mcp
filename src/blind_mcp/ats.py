@@ -283,7 +283,10 @@ def fetch_postings(
         f"none of these boards, which is the case for Google, Meta, Amazon "
         f"and Apple. Workday tenants are found automatically, but only under "
         f"the company name: if theirs differs, pass "
-        f"board='workday:<tenant>/<site>' or paste the careers URL."
+        f"board='workday:<tenant>/<site>' or paste the careers URL. "
+        f"If the employer really is unreachable, market_rate across their "
+        f"direct competitors is the closest available answer -- those are the "
+        f"offers they are competing with, and several of them do publish."
     )
 
 

@@ -643,7 +643,10 @@ def market_rate(
     and carries the converted one beside it.
 
     Companies on none of the supported boards are listed under `unreachable`
-    rather than silently dropped.
+    rather than silently dropped. This is also the fallback when the company
+    you actually care about is one of those: Google, Meta, Amazon and Apple
+    publish nothing readable, but the employers competing for the same people
+    do, and that is the band those offers are set against.
     """
     rows, unreachable = [], []
     for company in companies[:12]:
