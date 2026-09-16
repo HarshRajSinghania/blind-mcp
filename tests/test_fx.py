@@ -57,3 +57,49 @@ def test_a_single_market_needs_no_rates(monkeypatch):
     )
     rows, meta = server._by_market(_priced("USD", 1, 2, 3), "USD")
     assert meta is None and len(rows) == 1
+
+
+def _posting(currency, low, high):
+    return {"title": "Senior Engineer", "location": "X", "url": "u",
+            "company": "c", "board": "b",
+            "pay": {"min": low, "max": high, "currency": currency,
+                    "interval": "year", "source": "posting_text"}}
+
+
+def test_market_rate_ranks_by_pay_not_by_exchange_rate(monkeypatch):
+    """340,000 PLN sorts above 187,200 USD numerically and is worth half."""
+    from blind_mcp import ats
+
+    boards = {
+        "PolandCo": [_posting("PLN", 272_000, 408_000)],
+        "USCo": [_posting("USD", 139_200, 235_200)],
+    }
+    monkeypatch.setattr(fx, "rates", lambda *a, **k: TABLE)
+    monkeypatch.setattr(
+        ats, "fetch_postings", lambda company, board=None, role="": ("b", boards[company])
+    )
+
+    result = server.market_rate("engineer", ["PolandCo", "USCo"], level="senior")
+
+    assert [r["company"] for r in result["rates"]] == ["USCo", "PolandCo"]
+    poland = result["rates"][1]
+    assert poland["typical"] == {"min": 272_000, "max": 408_000}   # published
+    assert poland["typical_in_USD"] == {"min": 72_317, "max": 108_476}
+    assert result["fx"]["base"] == "USD"
+    assert result["currencies_compared"] == ["PLN", "USD"]
+
+
+def test_market_rate_needs_no_rates_for_one_currency(monkeypatch):
+    from blind_mcp import ats
+
+    boards = {"A": [_posting("USD", 100_000, 200_000)],
+              "B": [_posting("USD", 300_000, 400_000)]}
+    monkeypatch.setattr(
+        fx, "rates", lambda *a, **k: (_ for _ in ()).throw(AssertionError("fetched"))
+    )
+    monkeypatch.setattr(
+        ats, "fetch_postings", lambda company, board=None, role="": ("b", boards[company])
+    )
+    result = server.market_rate("engineer", ["A", "B"])
+    assert [r["company"] for r in result["rates"]] == ["B", "A"]
+    assert result["fx"] is None

@@ -605,8 +605,13 @@ def market_rate(
     without it, each company's largest band is used, which may not be the
     same rung.
 
-    Companies not on Greenhouse, Ashby or Lever are listed under
-    `unreachable` rather than silently dropped.
+    Rows are sorted by what each band is worth in one currency, not by its
+    raw number: a Polish band of 340,000 PLN outranks a US one of 187,200 USD
+    numerically and is worth about half. Each row keeps its published figure
+    and carries the converted one beside it.
+
+    Companies on none of the supported boards are listed under `unreachable`
+    rather than silently dropped.
     """
     rows, unreachable = [], []
     for company in companies[:12]:
@@ -638,17 +643,48 @@ def market_rate(
             "matched_requested_level": bool(level) and chosen == level,
         })
 
-    rows.sort(key=lambda r: (r["typical"]["min"] + r["typical"]["max"]) / 2, reverse=True)
+    # Sorting mixed currencies by their raw numbers ranks by exchange rate
+    # rather than by pay, so convert to whichever currency most rows use.
+    # Whichever currency most rows use. Ties are broken towards USD and then
+    # alphabetically, because picking the larger of a set is not stable
+    # between runs and the base currency would silently change.
+    present = {r["currency"] for r in rows}
+    base = sorted(
+        present,
+        key=lambda c: (-sum(r["currency"] == c for r in rows), c != "USD", c),
+    )[0] if present else None
+    table = fx.rates(base, ats.USER_AGENT) if base and len(
+        {r["currency"] for r in rows}
+    ) > 1 else None
+    for row in rows:
+        low = fx.convert(row["typical"]["min"], row["currency"], base, table) if table else None
+        high = fx.convert(row["typical"]["max"], row["currency"], base, table) if table else None
+        if low and high:
+            row[f"typical_in_{base}"] = {"min": round(low), "max": round(high)}
+        converted = row.get(f"typical_in_{base}") or row["typical"]
+        row["_rank"] = (converted["min"] + converted["max"]) / 2
+    rows.sort(key=lambda r: r.pop("_rank"), reverse=True)
+
+    mixed = sorted({r["currency"] for r in rows})
     return {
         "role": role,
         "level_requested": level or None,
         "compared": len(rows),
         "rates": rows,
+        "fx": {
+            "base": base,
+            "rate_date": table.get("date"),
+            "source": "ECB daily reference rates via frankfurter.dev",
+        } if table else None,
+        "currencies_compared": mixed,
         "unreachable": unreachable,
         "note": (
-            "Sorted by band midpoint. Rows where matched_requested_level is "
-            "false fell back to the company's largest band and may be a "
-            "different rung -- read `level` before comparing them."
+            "Sorted by band midpoint, converted to a common currency where "
+            "the rows use more than one -- an unconverted ranking would order "
+            "by exchange rate rather than by pay. Rows where "
+            "matched_requested_level is false fell back to the company's "
+            "largest band and may be a different rung -- read `level` before "
+            "comparing them."
         ),
     }
 
