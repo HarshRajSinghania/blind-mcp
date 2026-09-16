@@ -2,8 +2,8 @@
 
 [![tests](https://github.com/dheerajjha/blind-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/dheerajjha/blind-mcp/actions/workflows/test.yml)
 [![good first issues](https://img.shields.io/github/issues/dheerajjha/blind-mcp/good%20first%20issue?label=good%20first%20issues&color=7057ff)](https://github.com/dheerajjha/blind-mcp/issues?q=is%3Aopen+label%3A%22good+first+issue%22)
-[![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
-[![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![python](https://img.shields.io/badge/python-3.10%2B-blue)](https://github.com/dheerajjha/blind-mcp/blob/main/pyproject.toml)
+[![license](https://img.shields.io/badge/license-MIT-green)](https://github.com/dheerajjha/blind-mcp/blob/main/LICENSE)
 
 **Find out what a role actually pays — including in markets where the employer
 publishes nothing.**
@@ -47,8 +47,7 @@ intended for machines, and stable — not scraping.
 | `research(company, question, max_posts=)` | Pick the topic, rank threads against the question, return them in full |
 | `company_topics` / `company_posts` / `read_post` | Listings and single threads |
 
-> [!WARNING]
-> **Blind began returning 403 to all automated requests around September 2026.**
+> ⚠️ **Blind began returning 403 to all automated requests around September 2026.**
 > This is site-wide bot protection, not a block on this project: `curl` and an
 > empty User-Agent are refused too, and only a browser User-Agent gets through.
 > `robots.txt` still permits `/company/`, but the WAF does not.
@@ -161,9 +160,9 @@ Small project, easy to contribute to. The cheapest useful change is a **keyword
 alias** — one dict entry plus a test — and it's the change that most improves
 answers, because `research` only finds threads whose words match yours.
 
-Start with [**good first issues**](.github/GOOD_FIRST_ISSUES.md) — nine open,
+Start with [**good first issues**](https://github.com/dheerajjha/blind-mcp/blob/main/.github/GOOD_FIRST_ISSUES.md) — nine open,
 all real and reproduced, each one saying where the code is and how to test the
-fix — then [CONTRIBUTING.md](CONTRIBUTING.md). Issues are labelled by size (`size: XS`
+fix — then [CONTRIBUTING.md](https://github.com/dheerajjha/blind-mcp/blob/main/CONTRIBUTING.md). Issues are labelled by size (`size: XS`
 is under 30 minutes) and `mentored` means ask questions in the thread and
 you'll get walked through it. First review within 48 hours.
 
@@ -175,7 +174,7 @@ speed.
 
 `mcp-name: io.github.dheerajjha/blind-mcp`
 
-See [RELEASING.md](RELEASING.md).
+See [RELEASING.md](https://github.com/dheerajjha/blind-mcp/blob/main/RELEASING.md).
 
 ## License
 
