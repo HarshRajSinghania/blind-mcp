@@ -1,7 +1,13 @@
 # Contributing
 
-Three ways in, cheapest first: a **keyword alias**, a **parser fix**, a **new
-tool**. All three are small — this is a ~400 line project.
+Three ways in, cheapest first: a **job-board adapter**, a **parser fix**, a
+**new tool**. All are small — this is a ~600 line project.
+
+**Read [#12](https://github.com/dheerajjha/blind-mcp/issues/12) first.** Blind
+now 403s every non-browser User-Agent, so the Blind tools cannot reach the site.
+We will not spoof a browser to get around it, and PRs doing so will be closed.
+The pay tools read public job-board APIs and are unaffected — that is where the
+useful work is right now.
 
 **The standing principle behind everything below: a wrong answer is worse than
 no answer.** People ask this server whether a company will let them work from
@@ -31,7 +37,19 @@ gets checked against real output before merge.
 **Review promise:** first review within 48 hours. An alias merges as soon as it
 has a passing test. No bikeshedding your regex.
 
-## 1. Add a keyword alias (10 minutes, no HTTP knowledge needed)
+## 1. Add a job-board adapter (an hour, and the most useful thing you can do)
+
+`ats.fetch_postings` reads Greenhouse, Ashby and Lever. Everything else —
+Google, Atlassian, Canva, most Indian employers — raises `BoardNotFound`. Each
+adapter you add is a whole category of employer the tool can suddenly answer
+for. See [#13](https://github.com/dheerajjha/blind-mcp/issues/13) for the
+candidates and the shape of the work.
+
+Prefer boards with a **documented public API**. If a board only yields to
+scraping, keep it clearly separate so its breakage cannot affect the API-backed
+paths.
+
+## 2. Add a keyword alias (10 minutes, no HTTP knowledge needed)
 
 `research` turns a question into keywords and probes them against Blind's
 company pages. It gets this wrong whenever a question uses different words than
@@ -47,7 +65,7 @@ Add your entry, add a line to `test_probe_terms_prefer_distinctive_words` in
 [`tests/test_server.py`](tests/test_server.py), and open the PR. Include the
 question you asked and what it returned before and after.
 
-## 2. Fix a parser (an hour)
+## 3. Fix a parser (an hour)
 
 Blind ships three overlapping copies of every post — plain HTML, a schema.org
 `DiscussionForumPosting`, and the Next.js RSC payload. We read the last two;
@@ -67,7 +85,7 @@ uv run python tests/fixtures/make_fixtures.py
 uv run pytest -q
 ```
 
-## 3. Add a tool (an afternoon)
+## 4. Add a tool (an afternoon)
 
 Tools live in [`src/blind_mcp/server.py`](src/blind_mcp/server.py) as
 `@mcp.tool()` functions. A tool earns its place if it answers a question the

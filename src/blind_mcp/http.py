@@ -37,6 +37,15 @@ MIN_INTERVAL = float(os.environ.get("BLIND_MCP_MIN_INTERVAL", "1.5"))
 SESSION_COOKIE = os.environ.get("BLIND_COOKIE", "").strip()
 
 
+class BlindBlocked(RuntimeError):
+    """Blind's bot protection refused the request.
+
+    Distinct from a 404: the company exists, we are simply not allowed in.
+    Callers must not report this as "no results", which would read as an
+    answer when it is an outage.
+    """
+
+
 class RobotsDenied(RuntimeError):
     """Raised when robots.txt disallows the path. Not caught anywhere: a denied
     path is a bug in the caller, not a runtime condition to recover from."""
@@ -145,6 +154,14 @@ def fetch(path_or_url: str, *, force: bool = False) -> str:
     with httpx.Client(timeout=30, follow_redirects=True, headers=headers) as client:
         resp = client.get(url)
 
+    if resp.status_code == 403:
+        raise BlindBlocked(
+            "Blind returned 403 to an automated request. Since ~Sept 2026 it "
+            "rejects every non-browser User-Agent site-wide -- curl and an "
+            "empty UA are refused too, so this is not specific to this client. "
+            "We do not spoof a browser to get around it. The ATS-backed pay "
+            "tools (job_openings, pay_bands) are unaffected."
+        )
     if "/session-out" in str(resp.url):
         raise RuntimeError(
             "Blind invalidated the session (code 2009). Unset BLIND_COOKIE — "

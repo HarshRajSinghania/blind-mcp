@@ -5,52 +5,78 @@
 [![python](https://img.shields.io/badge/python-3.10%2B-blue)](pyproject.toml)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Ask an anonymous professional network what it's actually like to work
-somewhere — from your AI assistant.**
+**Find out what a role actually pays — including in markets where the employer
+publishes nothing.**
 
-[Blind](https://www.teamblind.com) is where people say the things they won't put
-on Glassdoor: whether the 4-day office policy is really enforced, what the
-parental leave actually is, whether a team is worth joining. But its own search
-is close to unusable — searching *"Roku India RTO"* returns twelve unrelated
-referral posts — so the answers sit there unreachable.
+Colorado, California, New York, Washington and Illinois require a salary range
+on covered job postings. India, Singapore and most of the EU require none. So
+the same title, at the same company, in the same week, is posted with a band in
+Denver and without one in Bengaluru.
 
-This finds them.
+The band is still there. It is just attached to a different listing.
 
 ```
-research(company="Roku", question="how many days in office in India")
+pay_bands(company="Databricks", role="forward deployed")
 
-  → "Roku India - Reviews"  ·  2026-03-31
-    AI summary: "...strictly enforced, with a mandatory four-day requirement,
-                 though exceptions are possible at a manager's discretion"
+  101 matching openings · 68 publish a range
+  USD 140,400 – 320,200   (median 182,000 – 250,208)
 
-    [Adobe]    "the wfo policy is enforced orgwide, you can take few times
-                wfh based on managers discretion"
-    [Carelon]  "Yes 4 days mandatory and its open culture"
+  PUBLISHES A RANGE                      PUBLISHES NOTHING (same title)
+    $152,900–210,155  United States        Remote - India
+    $182,000–250,208  MD; VA; D.C.         Seoul, South Korea
+    $211,800–291,300  Remote - D.C.        London, United Kingdom
+    $178,800–245,850  Central - US         Berlin; Munich
 ```
 
-Every comment keeps its **employer tag** and **date**, because that's how you
-weigh an anonymous claim — an answer from someone at the company reads
-differently from a passer-by, and a 2021 answer about policy may simply be
-wrong now.
+That is the same employer, the same title, the same moment — a far better
+anchor for an unpublished number than any salary survey, and it takes one call.
 
-**No login. No API key.** Every read path works logged out.
+Reads the **public job-board APIs** (Greenhouse, Ashby, Lever). Documented,
+intended for machines, and stable — not scraping.
 
 ## Tools
 
+### Pay
+
+
+### Culture — currently blocked
+
 | Tool | What it does |
 | --- | --- |
-| `company_topics(company)` | The topics Blind itself suggests for a company — for Roku: `india`, `wlb`, `culture`, `layoffs`, `interview`, `rsu`, … |
-| `company_posts(company, topic=, page=, limit=)` | Post listings, optionally scoped to one topic |
-| `find(company, keyword, limit=, page=)` | Search a company's posts by keyword — `find("Intuit", "maternity")` returns exactly the 7 maternity threads |
-| `read_post(url, max_comments=)` | One thread in full: body, Blind's AI summary, comments with employers |
-| `research(company, question, max_posts=)` | One-shot: picks the topic, ranks its posts against the question, returns the top threads in full |
+| `find(company, keyword, limit=, page=)` | Search a company's [Blind](https://www.teamblind.com) posts by keyword |
+| `research(company, question, max_posts=)` | Pick the topic, rank threads against the question, return them in full |
+| `company_topics` / `company_posts` / `read_post` | Listings and single threads |
 
-`find` fetches one page per call. Its `total_matches` covers all matches;
-`posts` contains at most `limit` cards from the requested `page` (default 1).
-Use `max_page` to discover further pages, e.g. `find("Intuit", "leave", page=2)`.
-An empty later page is normal; stop paging. A small `limit` truncates that page,
-so increase it to see the rest of its cards. `research` still probes only the
-first page of each keyword and never walks pagination automatically.
+> [!WARNING]
+> **Blind began returning 403 to all automated requests around September 2026.**
+> This is site-wide bot protection, not a block on this project: `curl` and an
+> empty User-Agent are refused too, and only a browser User-Agent gets through.
+> `robots.txt` still permits `/company/`, but the WAF does not.
+>
+> We do not spoof a browser to get around it — that would be circumventing an
+> access control, and it is the first thing their next escalation defeats. The
+> Blind tools now raise `BlindBlocked` with an explanation rather than
+> returning empty results that would read as "no discussion found".
+>
+> The pay tools are unaffected. See [#12](https://github.com/dheerajjha/blind-mcp/issues/12).
+
+## Coverage
+
+Measured, not estimated:
+
+| Company | Board | Open roles | With a published range |
+| --- | --- | --- | --- |
+| Databricks | Greenhouse | 880 | 464 (52%) |
+| Anthropic | Greenhouse | 595 | 470 (78%) |
+| Ramp | Ashby | 148 | 141 (95%) |
+| Figma | Greenhouse | 158 | 101 (63%) |
+| Notion | Ashby | 127 | 71 (55%) |
+| Stripe | Greenhouse | 647 | 21 (3%) |
+
+**Not covered:** employers who self-host their careers site — Google, Meta,
+Amazon, Apple, Atlassian, Canva — and most Indian-headquartered companies.
+`fetch_postings` raises `BoardNotFound` and says so rather than returning
+nothing. Adding an adapter is [#13](https://github.com/dheerajjha/blind-mcp/issues/13).
 
 ## Install
 

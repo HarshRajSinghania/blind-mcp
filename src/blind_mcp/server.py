@@ -18,7 +18,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
-from . import http, parse
+from . import ats, http, parse
 
 from . import __version__
 
@@ -190,6 +190,8 @@ def _resolve(company: str) -> str:
         try:
             http.fetch(f"/company/{name}/posts")
             return name
+        except http.BlindBlocked:
+            raise  # an outage, not a bad company name -- say so plainly
         except Exception:
             continue
     raise ValueError(
@@ -364,6 +366,113 @@ def research(company: str, question: str, max_posts: int = 4) -> dict[str, Any]:
             "Blind is anonymous and unverified. Weigh claims by the commenter's "
             "employer and corroborate anything load-bearing. Check thread dates "
             "-- policy answers go stale."
+        ),
+    }
+
+
+
+# ---------------------------------------------------------------- pay ranges
+
+
+def _summarise(band: list[dict[str, Any]]) -> dict[str, Any] | None:
+    if not band:
+        return None
+    lows = sorted(p["pay"]["min"] for p in band)
+    highs = sorted(p["pay"]["max"] for p in band)
+    return {
+        "low": lows[0],
+        "high": highs[-1],
+        "median_low": lows[len(lows) // 2],
+        "median_high": highs[len(highs) // 2],
+        "currency": band[0]["pay"]["currency"],
+        "from_postings": len(band),
+    }
+
+
+@mcp.tool()
+def job_openings(
+    company: str, role: str = "", with_pay_only: bool = False, limit: int = 25
+) -> dict[str, Any]:
+    """List a company's open roles, with the pay range where one is published.
+
+    Reads the company's public job-board API (Greenhouse, Ashby or Lever).
+    `role` filters to titles containing every word you give, so "forward
+    deployed" matches "AI Engineer - FDE (Forward Deployed Engineer)".
+
+    Not every employer is reachable: Google, Meta, Amazon and Apple self-host
+    their careers sites and are not on these boards.
+    """
+    board, postings = ats.fetch_postings(company)
+    hits = ats.matching(postings, role) if role else postings
+    if with_pay_only:
+        hits = [p for p in hits if p["pay"]]
+    return {
+        "company": company,
+        "board": board,
+        "total_open_roles": len(postings),
+        "matched": len(hits),
+        "with_published_pay": sum(1 for p in hits if p["pay"]),
+        "postings": hits[:limit],
+    }
+
+
+@mcp.tool()
+def pay_bands(company: str, role: str) -> dict[str, Any]:
+    """What a role actually pays, including where the employer publishes nothing.
+
+    Colorado, California, New York, Washington and Illinois require a salary
+    range on covered postings. India, Singapore and most of the EU require
+    none. So the same title at the same company is posted with a band in
+    Denver and without one in Bengaluru -- and the published band is a far
+    better anchor for the unpublished one than any salary-survey guess, because
+    it is the same employer, the same title, the same moment.
+
+    Returns the published band, the locations that carry it, and the locations
+    advertising the same title with nothing attached.
+    """
+    board, postings = ats.fetch_postings(company)
+    hits = ats.matching(postings, role)
+    if not hits:
+        titles = sorted({p["title"] for p in postings})[:12]
+        return {
+            "company": company,
+            "board": board,
+            "role": role,
+            "matched": 0,
+            "note": f"No open title contains all of {role!r}.",
+            "sample_titles": titles,
+        }
+
+    published = [p for p in hits if p["pay"]]
+    silent = [p for p in hits if not p["pay"]]
+    by_currency: dict[str, list[dict[str, Any]]] = {}
+    for p in published:
+        by_currency.setdefault(p["pay"]["currency"], []).append(p)
+
+    return {
+        "company": company,
+        "board": board,
+        "role": role,
+        "matched": len(hits),
+        "bands": {cur: _summarise(rows) for cur, rows in by_currency.items()},
+        "publishing": [
+            {
+                "title": p["title"],
+                "location": p["location"],
+                "pay": f"{p['pay']['currency']} {p['pay']['min']:,.0f}-{p['pay']['max']:,.0f}",
+                "url": p["url"],
+            }
+            for p in published[:15]
+        ],
+        "no_range_published": [
+            {"title": p["title"], "location": p["location"], "url": p["url"]}
+            for p in silent[:15]
+        ],
+        "note": (
+            f"{len(published)} of {len(hits)} matching postings carry a range. "
+            f"Where none is published the band above is the closest available "
+            f"anchor -- same employer, same title -- but it is a US-market "
+            f"figure and does not transfer to another country at face value."
         ),
     }
 
