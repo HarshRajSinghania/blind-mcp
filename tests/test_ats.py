@@ -83,18 +83,36 @@ def test_summarise_spans_the_whole_band():
 def test_explicit_board_rejects_unknown_provider():
     import pytest
     with pytest.raises(ValueError, match="Unknown board"):
-        ats.fetch_postings("Acme", board="workday:acme")
+        ats.fetch_postings("Acme", board="taleo:acme")
 
 
-def test_board_not_found_explains_how_to_recover():
+def test_workday_spec_accepts_a_pasted_careers_url():
+    """The site id is not derivable from a name, so a URL must be enough."""
+    from blind_mcp import workday
+    assert workday.parse_spec("nvidia/NVIDIAExternalCareerSite") == (
+        "nvidia", "NVIDIAExternalCareerSite", None
+    )
+    assert workday.parse_spec(
+        "https://nvidia.wd5.myworkdayjobs.com/en-US/NVIDIAExternalCareerSite"
+    ) == ("nvidia", "NVIDIAExternalCareerSite", "nvidia.wd5.myworkdayjobs.com")
+    # Some tenants are served from the second Workday domain.
+    assert workday.parse_spec("https://wd1.myworkdaysite.com/recruiting/paypal/jobs") == (
+        "paypal", "jobs", "paypal.wd1.myworkdayjobs.com"
+    )
+
+
+def test_board_not_found_explains_how_to_recover(monkeypatch):
     """A dead end should say what to do next, not just that it failed."""
-    try:
-        ats._BOARDS_ORIGINAL = ats._BOARDS
-        ats._BOARDS = ()               # force every loader to be skipped
+    from blind_mcp import workday
+
+    monkeypatch.setattr(ats, "_BOARDS", ())      # no loader answers
+    monkeypatch.setattr(                          # ...and no Workday tenant
+        workday, "discover",
+        lambda *a, **k: (_ for _ in ()).throw(workday.WorkdayNotFound("none")),
+    )
+    with __import__("pytest").raises(ats.BoardNotFound) as caught:
         ats.fetch_postings("Nonexistent Co")
-    except ats.BoardNotFound as exc:
-        msg = str(exc)
-        assert "board='greenhouse:<slug>'" in msg   # the recovery path
-        assert "self-host" in msg                    # the other explanation
-    finally:
-        ats._BOARDS = ats._BOARDS_ORIGINAL
+    msg = str(caught.value)
+    assert "board='greenhouse:<slug>'" in msg    # the recovery path
+    assert "self-host" in msg                     # the other explanation
+    assert "workday:<tenant>/<site>" in msg       # ...and the Workday one

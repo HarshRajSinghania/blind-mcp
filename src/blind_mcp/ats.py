@@ -17,9 +17,10 @@ import json
 import re
 import urllib.error
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Iterable
 
-from . import money
+from . import money, workday
 from .__init__ import __version__
 
 USER_AGENT = f"blind-mcp/{__version__} (+https://github.com/dheerajjha/blind-mcp)"
@@ -58,8 +59,8 @@ def _pay_from_html(content: str | None) -> dict[str, Any] | None:
     return money.parse(content, prefer=block.group(1) if block else None)
 
 
-def _posting(title, location, url, pay, company, board) -> dict[str, Any]:
-    return {
+def _posting(title, location, url, pay, company, board, detail=None) -> dict[str, Any]:
+    posting = {
         "title": title,
         "location": location or "",
         "url": url,
@@ -67,6 +68,15 @@ def _posting(title, location, url, pay, company, board) -> dict[str, Any]:
         "company": company,
         "board": board,
     }
+    if detail:
+        # Workday only publishes a range inside the description, so the pay
+        # for this posting costs another request. Carry what that request
+        # needs and let the caller decide which postings are worth it.
+        posting["_detail"] = detail
+        # Until that request is made, pay=None means "not looked at", which
+        # is a different claim from "the employer published nothing".
+        posting["pay_known"] = False
+    return posting
 
 
 def _greenhouse(board: str) -> list[dict[str, Any]]:
@@ -136,7 +146,72 @@ def _ashby(board: str) -> list[dict[str, Any]]:
     return out
 
 
-_BOARDS = (("greenhouse", _greenhouse), ("ashby", _ashby), ("lever", _lever))
+def _workday(slug: str, role: str = "") -> list[dict[str, Any]]:
+    if "/" in slug or "://" in slug:
+        tenant, site, host = workday.parse_spec(slug)
+    else:
+        # A bare tenant is the common case, from both the automatic path and
+        # board="workday:nvidia". robots.txt names the site, so ask for it
+        # rather than making the caller look it up.
+        tenant, site, host = slug, "", None
+    if not host or not site:
+        host, site = workday.discover(tenant, USER_AGENT)
+    out = []
+    for job in workday.list_postings(host, tenant, site, role, user_agent=USER_AGENT):
+        path = job.get("externalPath") or ""
+        out.append(
+            _posting(
+                job.get("title"),
+                job.get("locationsText"),
+                f"https://{host}/{site}{path}",
+                None,
+                tenant,
+                "workday",
+                detail={"host": host, "tenant": tenant, "site": site, "path": path},
+            )
+        )
+    return out
+
+
+_BOARDS = (
+    ("greenhouse", _greenhouse),
+    ("ashby", _ashby),
+    ("lever", _lever),
+    ("workday", _workday),
+)
+# Boards that answer with everything in one request, so guessing a slug
+# against them is cheap. Workday needs host discovery plus a search, so it is
+# only tried once these have all missed.
+_CHEAP = {"greenhouse", "ashby", "lever"}
+
+
+def enrich_pay(postings: list[dict[str, Any]], limit: int = 40) -> int:
+    """Fetch the published range for postings that keep it behind a second call.
+
+    Returns how many were filled. Bounded, because this is one request per
+    posting: the point of doing it after title matching is that the bound is
+    reached by the postings a question is actually about.
+    """
+    pending = [
+        p for p in postings if p.get("_detail") and not p.get("pay")
+    ][:limit]
+    if not pending:
+        return 0
+
+    def _one(posting: dict[str, Any]) -> None:
+        detail = posting["_detail"]
+        posting["pay"] = workday.fetch_pay(
+            detail["host"], detail["tenant"], detail["site"], detail["path"],
+            user_agent=USER_AGENT,
+        )
+
+    # Workers overlap the waiting, not the asking: the throttle in workday.py
+    # is global, so the request rate is the same as it would be serially.
+    with ThreadPoolExecutor(max_workers=workday.WORKERS) as pool:
+        list(pool.map(_one, pending))
+    for posting in pending:
+        posting["pay_known"] = True
+    return len(pending)
 
 
 def board_slugs(company: str) -> list[str]:
@@ -149,7 +224,7 @@ def board_slugs(company: str) -> list[str]:
 
 
 def fetch_postings(
-    company: str, board: str | None = None
+    company: str, board: str | None = None, role: str = ""
 ) -> tuple[str, list[dict[str, Any]]]:
     """Find a company's public job board and return every posting on it.
 
@@ -168,19 +243,36 @@ def fetch_postings(
                 f"Unknown board {name!r}; expected one of "
                 f"{', '.join(n for n, _ in _BOARDS)}."
             )
-        postings = loader(slug or board_slugs(company)[0])
+        target = slug or board_slugs(company)[0]
+        postings = loader(target, role) if name == "workday" else loader(target)
         if not postings:
             raise BoardNotFound(f"{board} has no postings.")
+        if name == "workday":
+            found = postings[0]["_detail"]
+            return f"workday:{found['tenant']}/{found['site']}", postings
         return f"{name}:{slug}", postings
 
-    for slug in board_slugs(company):
-        for name, loader in _BOARDS:
+    for name, loader in _BOARDS:
+        if name not in _CHEAP:
+            continue
+        for slug in board_slugs(company):
             try:
                 postings = loader(slug)
             except (BoardNotFound, urllib.error.URLError, json.JSONDecodeError):
                 continue
             if postings:
                 return f"{name}:{slug}", postings
+
+    # Last, because it costs host discovery before it can answer at all.
+    for slug in board_slugs(company)[:1]:
+        try:
+            postings = _workday(slug, role)
+        except (workday.WorkdayNotFound, ValueError, urllib.error.URLError,
+                json.JSONDecodeError, OSError):
+            postings = []
+        if postings:
+            found = postings[0]["_detail"]
+            return f"workday:{found['tenant']}/{found['site']}", postings
     raise BoardNotFound(
         f"No public Greenhouse, Ashby or Lever board found for {company!r} "
         f"(tried slugs {board_slugs(company)}). Two common reasons: the board "
@@ -189,7 +281,9 @@ def fetch_postings(
         f"jobs.ashbyhq.com/<slug>, jobs.lever.co/<slug>), then pass "
         f"board='greenhouse:<slug>' -- or the employer self-hosts and is on "
         f"none of these boards, which is the case for Google, Meta, Amazon "
-        f"and Apple."
+        f"and Apple. Workday tenants are found automatically, but only under "
+        f"the company name: if theirs differs, pass "
+        f"board='workday:<tenant>/<site>' or paste the careers URL."
     )
 
 

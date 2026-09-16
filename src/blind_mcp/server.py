@@ -438,14 +438,18 @@ def job_openings(
     deployed" matches "AI Engineer - FDE (Forward Deployed Engineer)".
 
     Not every employer is reachable: Google, Meta, Amazon and Apple self-host
-    their careers sites and are not on these boards.
+    their careers sites and are not on these boards. Workday tenants (NVIDIA,
+    Salesforce, Adobe, Cisco, HPE) are, and are found from the company name.
     """
-    board, postings = ats.fetch_postings(company, board or None)
+    board, postings = ats.fetch_postings(company, board or None, role=role)
     hits = ats.matching(postings, role) if role else postings
+    # Only the postings about to be returned are worth a second request.
+    ats.enrich_pay(hits[: limit if not with_pay_only else limit * 3])
     if with_pay_only:
         hits = [p for p in hits if p["pay"]]
     for p in hits[:limit]:
         p["level"] = levels.classify(p["title"])
+        p.pop("_detail", None)
     return {
         "company": company,
         "board": board,
@@ -457,7 +461,9 @@ def job_openings(
 
 
 @mcp.tool()
-def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
+def pay_bands(
+    company: str, role: str, board: str = "", max_lookups: int = 40
+) -> dict[str, Any]:
     """What a role pays at one company, broken down by seniority.
 
     Colorado, California, New York, Washington and Illinois require a salary
@@ -476,8 +482,11 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
     independent evidence there is: 48 postings sharing one band is one data
     point advertised 48 times, not 48 data points.
     """
-    board, postings = ats.fetch_postings(company, board or None)
+    board, postings = ats.fetch_postings(company, board or None, role=role)
     hits = ats.matching(postings, role)
+    # Workday keeps the range inside each description. Fetch those now that
+    # the list is down to the postings this question is actually about.
+    ats.enrich_pay(hits, limit=max_lookups)
     if not hits:
         return {
             "company": company, "board": board, "role": role, "matched": 0,
@@ -491,7 +500,11 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
     # a number that is wrong rather than merely imprecise, so the two never mix.
     interval = _dominant(same_currency, "interval")
     priced = [p for p in same_currency if p["pay"]["interval"] == interval]
-    silent = [p for p in hits if not p["pay"]]
+    silent = [p for p in hits if not p["pay"] and p.get("pay_known", True)]
+    # Boards that hide pay behind a second request are only checked up to
+    # max_lookups. Counting the rest as "publishes nothing" would be a claim
+    # about the employer that we never actually tested.
+    unchecked = [p for p in hits if not p["pay"] and not p.get("pay_known", True)]
     other_cur = sorted({
         p["pay"]["currency"] for p in hits if p["pay"] and p["pay"]["currency"] != currency
     })
@@ -519,6 +532,7 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
             for p in silent[:15]
         ],
         "no_range_count": len(silent),
+        "not_checked_count": len(unchecked),
         "note": (
             f"{len(priced)} of {len(hits)} matching postings publish a {interval}ly "
             f"range in {currency}. `by_level` covers that currency only; "
@@ -531,6 +545,13 @@ def pay_bands(company: str, role: str, board: str = "") -> dict[str, Any]:
             f"management when they are not. Check `precision` before relying "
             f"on a band: 'wide' means the employer published one range across "
             f"several levels and it narrows little."
+            + (
+                f" {len(unchecked)} further matching postings were not checked, "
+                f"because this board stores the range inside each posting and "
+                f"the lookup budget is {max_lookups}; raise max_lookups to "
+                f"include them. They are not counted as publishing nothing."
+                if unchecked else ""
+            )
         ),
     }
 
@@ -553,11 +574,12 @@ def market_rate(
     rows, unreachable = [], []
     for company in companies[:12]:
         try:
-            board, postings = ats.fetch_postings(company)
+            board, postings = ats.fetch_postings(company, role=role)
         except Exception as exc:
             unreachable.append({"company": company, "reason": type(exc).__name__})
             continue
         hits = ats.matching(postings, role)
+        ats.enrich_pay(hits, limit=25)
         currency = _dominant_currency(hits)
         priced = [p for p in hits if p["pay"] and p["pay"]["currency"] == currency]
         if not priced:
