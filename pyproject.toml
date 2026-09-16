@@ -1,12 +1,12 @@
 [project]
 name = "blind-mcp"
-version = "0.2.0"
-description = "Find what a role actually pays, including in markets where the employer publishes nothing -- reads public job-board APIs (Greenhouse, Ashby, Lever) to surface the salary band attached to the same title elsewhere."
+version = "0.3.0"
+description = "Find what a role actually pays, including where the employer publishes nothing -- reads public job-board APIs (Greenhouse, Ashby, Lever, Workday) for published salary bands, per seniority and per currency."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = ["httpx>=0.27", "mcp>=2"]
-keywords = ["mcp", "model-context-protocol", "mcp-server", "blind", "teamblind", "careers", "claude"]
+keywords = ["mcp", "model-context-protocol", "mcp-server", "salary", "compensation", "pay-transparency", "greenhouse", "workday", "careers", "claude"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",

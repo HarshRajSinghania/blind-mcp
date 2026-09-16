@@ -45,13 +45,40 @@ band spanning its whole ladder, and both are real.
 That is the same employer, the same title, the same moment — a far better
 anchor for an unpublished number than any salary survey, and it takes one call.
 
-Reads the **public job-board APIs** (Greenhouse, Ashby, Lever). Documented,
-intended for machines, and stable — not scraping.
+### The same job, in every market the employer posts it in
+
+Employers covered by transparency law in one country often post the same role
+in several. That is the closest thing to a controlled experiment you can get:
+same company, same title, same week.
+
+```
+pay_bands(company="Anthropic", role="software engineer")
+
+  MARKET   PUBLISHED BAND            POSTS   ≈ IN USD              vs US
+  USD      405,000–485,000              78   —                     —
+  GBP      325,000–390,000              10   438,206–525,847       1.08x
+  EUR      235,000–295,000               2   271,165–340,399       0.69x
+
+  fx: ECB daily reference rates, 2026-09-15
+```
+
+The published figure is always kept; the conversion sits beside it, dated.
+Without it the comparison misleads — GitLab's Polish band reads as
+`272,000–408,000` against a US `139,200–235,200`, which looks like Poland
+paying more and is actually **0.48x**.
+
+Reads the **public job-board APIs** — Greenhouse, Ashby, Lever and Workday.
+Documented, intended for machines, and stable — not scraping.
 
 ## Tools
 
 ### Pay
 
+| Tool | What it does |
+| --- | --- |
+| `pay_bands(company, role, board=, max_lookups=)` | Published bands per seniority, plus every currency the role is posted in, converted |
+| `market_rate(role, companies, level=)` | The same rung across several employers, sorted by midpoint |
+| `job_openings(company, role=, with_pay_only=)` | The underlying postings, with inferred level |
 
 ### Culture — currently blocked
 
@@ -79,15 +106,32 @@ Measured, not estimated:
 
 | Company | Board | Open roles | With a published range |
 | --- | --- | --- | --- |
-| Databricks | Greenhouse | 880 | 464 (52%) |
-| Anthropic | Greenhouse | 595 | 470 (78%) |
-| Ramp | Ashby | 148 | 141 (95%) |
-| Figma | Greenhouse | 158 | 101 (63%) |
-| Notion | Ashby | 127 | 71 (55%) |
-| Stripe | Greenhouse | 647 | 21 (3%) |
+| Company | Board | Open roles | With a published range | Currencies |
+| --- | --- | --- | --- | --- |
+| Databricks | Greenhouse | 880 | 471 (54%) | USD 451 · CAD 12 · EUR 8 |
+| Anthropic | Greenhouse | 595 | 525 (88%) | USD 466 · GBP 44 · EUR 14 |
+| Ramp | Ashby | 148 | 141 (95%) | USD 132 · CAD 6 · GBP 2 |
+| Monzo | Greenhouse | 66 | 55 (83%) | GBP 47 · EUR 8 |
+| Notion | Ashby | 127 | 83 (65%) | USD 71 · EUR 12 |
+| Figma | Greenhouse | 156 | 101 (65%) | USD 101 |
+| GitLab | Greenhouse | 224 | 94 (42%) | USD 85 · PLN 9 |
+| Stripe | Greenhouse | 648 | 22 (3%) | USD 21 · EUR 1 |
+| NVIDIA | Workday | 1,693 | on demand | USD, level-labelled |
+| Cisco · Adobe · Salesforce · HPE · eBay | Workday | — | on demand | — |
+
+Workday says **on demand** because it keeps the range inside each posting
+rather than in the listing. Postings are filtered by title first and only the
+survivors are fetched, so a question about NVIDIA costs about forty requests
+instead of 1,693. `max_lookups` sets that budget, and anything beyond it is
+reported as `not_checked_count` — never as the employer publishing nothing.
+
+Workday tenants are found by reading their `robots.txt`, which names the
+public career site in its `Sitemap` line. If the tenant differs from the
+company name, paste the careers URL or pass
+`board="workday:<tenant>/<site>"`.
 
 **Not covered:** employers who self-host — Google, Meta, Amazon, Apple — and
-most Indian-headquartered companies. `BoardNotFound` explains the two causes
+most Indian-headquartered companies. `BoardNotFound` explains the causes
 rather than just failing.
 
 If a company *is* on one of these boards under a token you can't guess, read
@@ -97,7 +141,7 @@ it out of their careers URL and pass it directly:
 pay_bands("Some Rebranded Co", "engineer", board="greenhouse:theirslug")
 ```
 
-Adding a Workday or SmartRecruiters adapter is
+SmartRecruiters and self-hosted Indian employers are still open in
 [#13](https://github.com/dheerajjha/blind-mcp/issues/13).
 
 ## Install
@@ -164,6 +208,14 @@ has no search tool** and refuses to fetch that path. It also:
 
 Configure via `BLIND_MCP_CACHE_DIR`, `BLIND_MCP_CACHE_TTL`,
 `BLIND_MCP_MIN_INTERVAL`, `BLIND_MCP_USER_AGENT`.
+
+The job boards get the same treatment. Workday needs one request per posting
+to read a range, so those are spaced 250ms apart behind a lock shared by all
+four workers — the workers overlap Workday's latency without ever raising the
+rate we ask at — and the number of lookups is capped per question. Workday
+site discovery reads `robots.txt` and takes its word for what is public,
+including never treating a `Disallow`ed path as a career site. Exchange rates
+are cached for a day, because the ECB publishes them once a working day.
 
 Blind's Terms of Service restrict automated access. This reads public pages at
 human pace for personal research; bulk crawling is both a ToS problem and, given
