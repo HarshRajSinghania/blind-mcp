@@ -162,15 +162,33 @@ def test_research_does_not_walk_find_pagination(monkeypatch):
                      "/company/Acme/posts/acme-maternity"]
 
 
-def test_find_mcp_schema_exposes_page():
+def test_find_mcp_schema_exposes_page(monkeypatch):
     import asyncio
+    import importlib
 
-    tools = asyncio.run(server.mcp.list_tools())
-    schema = next(tool for tool in tools if tool.name == "find").input_schema
+    # Blind tools are not registered by default while Blind 403s every
+    # automated request, so the schema only exists with them switched on.
+    monkeypatch.setenv("BLIND_MCP_ENABLE_BLIND", "1")
+    with_blind = importlib.reload(server)
+    try:
+        tools = asyncio.run(with_blind.mcp.list_tools())
+        schema = next(tool for tool in tools if tool.name == "find").input_schema
+    finally:
+        monkeypatch.delenv("BLIND_MCP_ENABLE_BLIND")
+        importlib.reload(server)
     assert schema["properties"]["page"]["type"] == "integer"
     assert schema["properties"]["page"]["default"] == 1
     assert schema["properties"]["limit"]["default"] == 25
     assert schema["required"] == ["company", "keyword"]
+
+
+def test_only_working_tools_are_offered_by_default():
+    """A tool list that can only raise costs the model context and misleads it."""
+    import asyncio
+
+    names = {tool.name for tool in asyncio.run(server.mcp.list_tools())}
+    assert names == {"job_openings", "pay_bands", "market_rate"}
+    assert server.BLIND_ENABLED is False
 
 
 def test_company_candidates_are_cheapest_first():

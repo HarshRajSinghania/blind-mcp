@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import sys
 import re
 from functools import lru_cache
 from typing import Any
@@ -23,6 +24,22 @@ from . import ats, fx, http, levels, parse
 from . import __version__
 
 mcp = MCPServer("blind", version=__version__)
+
+# Blind has answered every non-browser request with 403 since around September
+# 2026 (#12), so the five tools that read it can only raise. A tool list is
+# part of what the model reads before deciding what to do, and five entries
+# that always fail cost context and invite dead ends -- so they are not
+# registered unless asked for. The code and its tests stay exactly where they
+# are, and BLIND_MCP_ENABLE_BLIND=1 brings them back the moment the block
+# lifts or an operator has a legitimate route through it.
+BLIND_ENABLED = os.environ.get("BLIND_MCP_ENABLE_BLIND", "").strip().lower() in {
+    "1", "true", "yes", "on",
+}
+
+
+def blind_tool():
+    """Register a Blind-backed tool only when Blind is reachable."""
+    return mcp.tool() if BLIND_ENABLED else (lambda fn: fn)
 
 _STOPWORDS = {
     "the", "a", "an", "is", "are", "do", "does", "how", "what", "and", "or",
@@ -201,7 +218,7 @@ def _resolve(company: str) -> str:
     )
 
 
-@mcp.tool()
+@blind_tool()
 def company_topics(company: str) -> dict[str, Any]:
     """List the discussion topics Blind itself suggests for a company.
 
@@ -219,7 +236,7 @@ def company_topics(company: str) -> dict[str, Any]:
     }
 
 
-@mcp.tool()
+@blind_tool()
 def company_posts(
     company: str, topic: str | None = None, page: int = 1, limit: int = 25
 ) -> dict[str, Any]:
@@ -244,7 +261,7 @@ def company_posts(
     }
 
 
-@mcp.tool()
+@blind_tool()
 def read_post(url: str, max_comments: int = 40) -> dict[str, Any]:
     """Read one Blind post in full.
 
@@ -259,7 +276,7 @@ def read_post(url: str, max_comments: int = 40) -> dict[str, Any]:
     return post
 
 
-@mcp.tool()
+@blind_tool()
 def find(
     company: str, keyword: str, limit: int = 25, page: int = 1
 ) -> dict[str, Any]:
@@ -300,7 +317,7 @@ def find(
     }
 
 
-@mcp.tool()
+@blind_tool()
 def research(company: str, question: str, max_posts: int = 4) -> dict[str, Any]:
     """Answer a question about a company by pulling the most relevant threads.
 
@@ -707,6 +724,14 @@ def main() -> None:
         "--port", type=int, default=int(os.environ.get("BLIND_MCP_PORT", "8787"))
     )
     args = parser.parse_args()
+
+    if not BLIND_ENABLED:
+        print(
+            "blind-mcp: Blind tools are not registered -- Blind returns 403 to "
+            "automated requests (see issue #12). The pay tools are unaffected. "
+            "Set BLIND_MCP_ENABLE_BLIND=1 to register them anyway.",
+            file=sys.stderr,
+        )
 
     if not args.http:
         mcp.run()

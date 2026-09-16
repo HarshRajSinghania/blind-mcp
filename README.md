@@ -80,13 +80,18 @@ Documented, intended for machines, and stable — not scraping.
 | `market_rate(role, companies, level=)` | The same rung across several employers, sorted by midpoint |
 | `job_openings(company, role=, with_pay_only=)` | The underlying postings, with inferred level |
 
-### Culture — currently blocked
+### Culture — not registered by default
 
 | Tool | What it does |
 | --- | --- |
 | `find(company, keyword, limit=, page=)` | Search a company's [Blind](https://www.teamblind.com) posts by keyword |
 | `research(company, question, max_posts=)` | Pick the topic, rank threads against the question, return them in full |
 | `company_topics` / `company_posts` / `read_post` | Listings and single threads |
+
+These five are **switched off unless you ask for them** (`BLIND_MCP_ENABLE_BLIND=1`).
+A tool list is part of what a model reads before deciding what to do, and five
+entries that can currently only raise cost context and invite dead ends. The
+code and its tests are untouched, so the flag brings them straight back.
 
 > ⚠️ **Blind began returning 403 to all automated requests around September 2026.**
 > This is site-wide bot protection, not a block on this project: `curl` and an
