@@ -1,0 +1,52 @@
+name: release
+
+# Publishes to PyPI via Trusted Publishing (OIDC). There is no API token
+# anywhere -- PyPI verifies the workflow's identity directly, so nothing
+# long-lived exists to leak or rotate.
+#
+# To cut a release: bump the version in pyproject.toml, src/blind_mcp/__init__.py
+# and server.json (both places), then push a matching tag:
+#   git tag v0.1.0 && git push origin v0.1.0
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --dev
+      - name: Tests must pass before anything is published
+        run: uv run pytest -q
+      - name: Version in the tag must match the package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(uv run python -c "import blind_mcp; print(blind_mcp.__version__)")
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag $tag != package $pkg"
+            exit 1
+          fi
+          echo "tag and package agree on $pkg"
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # the OIDC token Trusted Publishing exchanges
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1
