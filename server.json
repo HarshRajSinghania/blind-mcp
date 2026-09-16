@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.dheerajjha/blind-mcp",
   "title": "Blind",
-  "description": "Find what a role actually pays, including in markets where the employer publishes nothing -- reads public job-board APIs (Greenhouse, Ashby, Lever) to surface the salary band attached to the same title elsewhere.",
+  "description": "What a role really pays, including markets where the employer publishes no range.",
   "repository": {
     "url": "https://github.com/dheerajjha/blind-mcp",
     "source": "github"
